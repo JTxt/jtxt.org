@@ -123,12 +123,15 @@
   }
   .blurb b{ color:var(--amber); font-weight:700; }
   .blurb + .blurb{ margin-top:-6px; }
-  #emptyLoadBtn{
-    font-family:var(--font); background:var(--amber); color:#000000;
+  #emptyActions{
+    display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
+  }
+  #emptyLoadBtn, #emptyExampleBtn{
+    font-family:var(--font); background:var(--inactive); color:#000000;
     border:none; border-radius:4px; padding:12px 22px; min-height:var(--tap);
     font-size:15px; font-weight:700; letter-spacing:0.06em; cursor:pointer;
   }
-  #emptyLoadBtn:active{ transform:scale(0.96); }
+  #emptyLoadBtn:active, #emptyExampleBtn:active{ transform:scale(0.96); }
   .keyline{ font-size:13px; color:var(--inactive); letter-spacing:0.04em; font-weight:500; }
 
   #dropOverlay{
@@ -269,6 +272,14 @@
   .tool:disabled{ opacity:.25; cursor:default; }
   .tool:active:not(:disabled) .ring{ transform:scale(0.92); }
 
+  .tool[data-tool="mirror"] .ring{ perspective:70px; }
+  .tool[data-tool="mirror"] .glyph{ transform-style:preserve-3d; }
+  .tool[data-tool="mirror"].is-flipping .glyph{ animation:mirrorFlip .46s cubic-bezier(0.5,0.05,0.2,1); }
+  @keyframes mirrorFlip{
+    0%   { transform:rotateY(0deg); }
+    100% { transform:rotateY(180deg); }
+  }
+
   #dock.presets-open .tool:not([data-tool="presets"]){ display:none; }
   #dock.presets-open #bar{ display:none; }
 
@@ -309,8 +320,12 @@
       <p class="blurb">Inspired by the practice of squinting at the art subject to see, evaluate, and sketch the large value shapes and proportions, before wasting time on the details.</p>
       <p class="blurb">Posterizing (separating it into value shapes) can also be helpful, and easier to read than just blurring.</p>
       <p class="blurb">There are presets that can be tuned to your image. You can also zoom to inspect, rotate, flip, and save the result.</p>
+      <p class="blurb">Everything happens on your device &mdash; <b>images are not transmitted elsewhere.</b></p>
 
-      <button id="emptyLoadBtn" type="button">Open an image</button>
+      <div id="emptyActions">
+        <button id="emptyLoadBtn" type="button">Open an image</button>
+        <button id="emptyExampleBtn" type="button">Use example image</button>
+      </div>
       <p class="keyline">or drop one anywhere &middot; or paste with Ctrl / Cmd + V</p>
     </div>
 
@@ -377,12 +392,12 @@
               <span class="tool-name">Posterize</span>
             </button>
 
-            <button class="tool" type="button" data-tool="snap" aria-label="Threshold snap">
+            <button class="tool" type="button" data-tool="snap" aria-label="Posterize offset">
               <span class="ring">
                 <svg class="arc" viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="19"/><circle class="fg" cx="22" cy="22" r="19"/></svg>
                 <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4.6h16v7.4H4z" fill="currentColor" stroke="none" opacity=".3"/><rect x="4" y="4.6" width="16" height="14.8" rx="1.4"/><path d="M4 12h16" stroke-dasharray="2.2 2.4"/><path d="M12 8.6l2.4 3.4H9.6z" fill="currentColor" stroke="none"/></svg></span>
               </span>
-              <span class="tool-name">Thres. snap</span>
+              <span class="tool-name">Post. offset</span>
             </button>
 
             <button class="tool" type="button" data-tool="color" aria-label="Color">
@@ -482,7 +497,7 @@
     posterize: { kind:'slider', label:'Posterize',
                  min:1.2, max:64, step:0.1, def:6, pxPerUnit:15,
                  fmt:function(v){ return v.toFixed(1) + ' levels'; } },
-    snap:      { kind:'slider', label:'Thres. snap',
+    snap:      { kind:'slider', label:'Post. offset',
                  min:0, max:100, step:1, def:50, pxPerUnit:5,
                  fmt:function(v){ return Math.round(v) + '%'; } },
     color:     { kind:'slider', label:'Color',
@@ -1372,6 +1387,7 @@
         buzz(t.on ? 10 : 6);
         requestRender();
         selectTool(key);
+        flipMirrorGlyph();
         return;
       }
 
@@ -1411,6 +1427,16 @@
     TOOLS.mirror.on = !TOOLS.mirror.on;
     state.flipX.target = TOOLS.mirror.on ? -1 : 1;
     refreshTool('mirror'); requestRender();
+    flipMirrorGlyph();
+  }
+
+  function flipMirrorGlyph(){
+    var el = toolEl('mirror');
+    if(!el) return;
+    el.classList.remove('is-flipping');
+    // eslint-disable-next-line no-unused-expressions
+    void el.offsetWidth; // restart the animation on repeated taps
+    el.classList.add('is-flipping');
   }
 
   // ---- Back to the untouched image. There is no button for this: the
@@ -1887,6 +1913,33 @@
     fileInput.value = '';
   });
   $('emptyLoadBtn').addEventListener('click', function(){ fileInput.click(); });
+
+  var exampleBtn = $('emptyExampleBtn');
+  if(exampleBtn){
+    exampleBtn.addEventListener('click', function(){
+      if(!gl) return;
+      exampleBtn.disabled = true;
+      var original = exampleBtn.textContent;
+      exampleBtn.textContent = 'Loading\u2026';
+      var url = 'sample-cc0-image.jpg';
+      var restore = function(){
+        exampleBtn.disabled = false;
+        exampleBtn.textContent = original;
+      };
+      fetch(url).then(function(res){
+        if(!res.ok) throw new Error('not found');
+        return res.blob();
+      }).then(function(blob){
+        var name = blob.name || 'sample-cc0-image.jpg';
+        var file = (blob instanceof File) ? blob : new File([blob], name, { type: blob.type || 'image/jpeg' });
+        handleFile(file);
+        restore();
+      }).catch(function(){
+        restore();
+        setBarText('Could not load the example image', '');
+      });
+    });
+  }
 
   var dragDepth = 0;
   window.addEventListener('dragenter', function(e){
