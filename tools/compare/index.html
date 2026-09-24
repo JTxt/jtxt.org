@@ -1,14 +1,1454 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-	<meta charset="utf-8">
-	<title>Flicker has moved</title>
-	<meta name="robots" content="noindex">
-	<link rel="canonical" href="https://jtxt.org/tools/flicker/">
-	<meta http-equiv="refresh" content="0; url=/tools/flicker/">
-	<script>location.replace('/tools/flicker/' + location.search + location.hash);</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drawing matcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #E4E9E8;
+    --panel: #F5F7F6;
+    --canvas: #FBFCFB;
+    --ink: #1F2529;
+    --muted: #59636A;
+    --line: #C3CCCB;
+    --blue: #2F7FBF;
+    --red: #C0362B;
+    --field: #FFFFFF;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171A1C; --panel: #212528; --canvas: #1B1F22; --ink: #E2E6E4; --muted: #9AA4A9;
+      --line: #384045; --blue: #6AAEDD; --red: #EE6B5D; --field: #2A2F33; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171A1C; --panel: #212528; --canvas: #1B1F22; --ink: #E2E6E4; --muted: #9AA4A9;
+    --line: #384045; --blue: #6AAEDD; --red: #EE6B5D; --field: #2A2F33; color-scheme: dark;
+  }
+  :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: inherit; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; line-height: 1.5;
+  }
+  body.busy { cursor: progress; }
+  .top { padding: 1.25rem 1rem 0.5rem; max-width: 72rem; margin: 0 auto; }
+  h1 { font-size: 1.6rem; line-height: 1.2; margin: 0 0 0.35rem; font-weight: 700; letter-spacing: -0.01em; }
+  .lede { margin: 0; color: var(--muted); max-width: 38rem; }
+  .layout { display: grid; gap: 1rem; padding: 0.75rem 1rem 2rem; max-width: 72rem; margin: 0 auto; }
+  @media (min-width: 900px) {
+    .layout { grid-template-columns: minmax(0, 1fr) 21rem; align-items: start; }
+    .stage-wrap { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 0.75rem); }
+  }
+  .stage {
+    background: var(--canvas); border: 1px solid var(--line); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center; min-height: 14rem; overflow: hidden;
+  }
+  #view { display: block; max-width: 100%; max-height: 72vh; width: auto; height: auto; touch-action: none; cursor: grab; }
+  #view.dragging { cursor: grabbing; }
+  .stage-empty { color: var(--muted); padding: 2rem; text-align: center; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.35rem 1.1rem; margin: 0.6rem 0 0; color: var(--muted); font-size: 0.9rem; }
+  .legend span::before { content: ""; display: inline-block; width: 0.9rem; height: 0.2rem; border-radius: 2px; margin-right: 0.4rem; vertical-align: middle; }
+  .legend .l-blue::before { background: var(--blue); }
+  .legend .l-red::before { background: var(--red); }
+  .viewbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; margin-top: 0.75rem; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .seg label { position: relative; }
+  .seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .seg span { display: block; padding: 0.4rem 0.8rem; font-size: 0.92rem; background: var(--field); border-right: 1px solid var(--line); }
+  .seg label:last-child span { border-right: 0; }
+  .seg input:checked + span { background: var(--ink); color: var(--panel); }
+  .seg input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .inline { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.92rem; color: var(--muted); }
+  .inline input[type="range"] { width: 7.5rem; }
+
+  .panel { display: grid; gap: 0.75rem; }
+  .group { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0.9rem 1rem 1rem; }
+  .group h2 { font-size: 1rem; margin: 0 0 0.6rem; font-weight: 700; }
+  .slots { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .slot { border: 1px dashed var(--line); border-radius: 4px; padding: 0.5rem; display: grid; gap: 0.4rem; align-content: start; }
+  .slot.filled { border-style: solid; }
+  .slot canvas { width: 100%; height: 5.5rem; object-fit: contain; background: var(--canvas); border-radius: 2px; }
+  .slot-name { font-size: 0.9rem; }
+  .slot-name b { display: inline-block; min-width: 1.1rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+  .row > select { flex: 1 1 10rem; min-width: 0; }
+  .btn {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    font: inherit; font-size: 0.95rem; font-weight: 700; padding: 0.5rem 0.9rem; border-radius: 4px;
+    border: 1px solid var(--ink); background: var(--field); color: var(--ink); cursor: pointer; min-height: 2.5rem;
+  }
+  .btn.small { font-size: 0.88rem; padding: 0.35rem 0.6rem; min-height: 2.1rem; font-weight: 400; }
+  .btn.primary { background: var(--ink); color: var(--panel); width: 100%; margin-top: 0.75rem; }
+  .btn.ghost { border-color: var(--line); font-weight: 400; }
+  .btn:disabled { opacity: 0.5; cursor: progress; }
+  .btn:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .btn:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .btn input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+  select { font: inherit; font-size: 0.95rem; padding: 0.45rem 0.5rem; border: 1px solid var(--line); border-radius: 4px; background: var(--field); color: var(--ink); min-height: 2.5rem; }
+  .field { display: grid; gap: 0.3rem; margin-bottom: 0.6rem; font-size: 0.95rem; }
+  .field .lab { display: flex; justify-content: space-between; }
+  .field output { font-variant-numeric: tabular-nums; color: var(--muted); }
+  input[type="range"] { width: 100%; accent-color: var(--blue); }
+  .check { display: flex; gap: 0.5rem; align-items: flex-start; font-size: 0.95rem; }
+  .check input { margin-top: 0.3rem; accent-color: var(--blue); }
+  .check small { display: block; color: var(--muted); font-size: 0.85rem; }
+  .status { margin: 0.6rem 0 0; min-height: 1.5em; font-size: 0.92rem; color: var(--muted); }
+  .readout { margin: 0; display: grid; gap: 0.1rem; }
+  .readout div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; border-bottom: 1px solid var(--line); }
+  .readout div:last-child { border-bottom: 0; }
+  .readout dt { color: var(--muted); font-size: 0.92rem; }
+  .readout dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+  .readout .lead dd { font-size: 1.15rem; }
+  .note { margin: 0.6rem 0 0; font-size: 0.9rem; color: var(--red); }
+  .note:empty { display: none; }
+  .about { font-size: 0.9rem; color: var(--muted); padding: 0 0.25rem; }
+  .about summary { cursor: pointer; color: var(--ink); }
+  .about p { margin: 0.5rem 0 0; }
+  [hidden] { display: none !important; }
+</style>
 </head>
 <body>
-	<p>Flicker has moved to <a href="/tools/flicker/">jtxt.org/tools/flicker/</a>.</p>
+<header class="top">
+  <h1>Drawing matcher</h1>
+  <p class="lede">Lines a drawing up on its reference using only moving, rotating and even scaling, so any proportion errors stay visible, then points to the regions that drifted.</p>
+</header>
+<main class="layout">
+  <section class="stage-wrap" aria-label="Comparison">
+    <div class="stage">
+      <canvas id="view" aria-label="Reference with the drawing laid over it"></canvas>
+      <p class="stage-empty" id="empty">Add a reference and a drawing, or load a sample pair.</p>
+    </div>
+    <p class="legend"><span class="l-blue">Your drawing</span><span class="l-red">Where a region should move</span><span>Drag the picture to nudge</span></p>
+    <div class="viewbar">
+      <div class="seg" role="radiogroup" aria-label="View">
+        <label><input type="radio" name="view" value="overlay" checked><span>Overlay</span></label>
+        <label><input type="radio" name="view" value="difference"><span>Difference</span></label>
+        <label><input type="radio" name="view" value="edges"><span>Edges</span></label>
+      </div>
+      <label class="inline">Opacity <input type="range" id="opacity" min="10" max="100" value="85"></label>
+      <label class="inline"><input type="checkbox" id="arrows" checked> Arrows</label>
+    </div>
+  </section>
+
+  <div class="panel">
+    <section class="group" aria-labelledby="h-images">
+      <h2 id="h-images">Images</h2>
+      <div class="slots">
+        <div class="slot">
+          <canvas id="thumbA" width="1" height="1" aria-hidden="true"></canvas>
+          <div class="slot-name"><b>A</b> Reference</div>
+          <label class="btn small">Choose image<input type="file" id="fileA" accept="image/*"></label>
+        </div>
+        <div class="slot">
+          <canvas id="thumbB" width="1" height="1" aria-hidden="true"></canvas>
+          <div class="slot-name"><b>B</b> Drawing</div>
+          <label class="btn small">Choose image<input type="file" id="fileB" accept="image/*"></label>
+        </div>
+      </div>
+      <div class="row">
+        <select id="sample" aria-label="Sample pair">
+          <option value="prop">Noisy page, proportion errors</option>
+          <option value="clean">Clean page</option>
+          <option value="noisy">Noisy page</option>
+          <option value="rot22">Rotated −22°, noisy</option>
+          <option value="rot170">Rotated 170°, noisy (slow)</option>
+        </select>
+        <button class="btn" id="loadSample" type="button">Load sample</button>
+      </div>
+    </section>
+
+    <section class="group" aria-labelledby="h-match">
+      <h2 id="h-match">Match</h2>
+      <label class="field"><span class="lab">Rotation search</span>
+        <select id="rotRange">
+          <option value="15">Within ±15°</option>
+          <option value="30" selected>Within ±30°</option>
+          <option value="90">Within ±90°</option>
+          <option value="180">Any angle (slow)</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="unfinished">
+        <span>The drawing is unfinished<small>Parts of the reference that aren't drawn yet count less.</small></span></label>
+      <button class="btn primary" id="matchBtn" type="button">Match</button>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="group" aria-labelledby="h-tune">
+      <h2 id="h-tune">Fine-tune</h2>
+      <label class="field"><span class="lab">Rotate <output id="rotOut">0.0°</output></span>
+        <input type="range" id="rot" min="-15" max="15" step="0.1" value="0"></label>
+      <label class="field"><span class="lab">Scale <output id="sclOut">100.0%</output></span>
+        <input type="range" id="scl" min="80" max="120" step="0.1" value="100"></label>
+      <div class="row">
+        <button class="btn" id="snapBtn" type="button">Snap to fit</button>
+        <button class="btn ghost" id="resetBtn" type="button">Reset to match</button>
+      </div>
+    </section>
+
+    <section class="group" aria-labelledby="h-result">
+      <h2 id="h-result">Result</h2>
+      <dl class="readout">
+        <div class="lead"><dt>Proportion score</dt><dd id="rScore">—</dd></div>
+        <div><dt>Average drift</dt><dd id="rRms">—</dd></div>
+        <div><dt>Edges lined up</dt><dd id="rQual">—</dd></div>
+        <div><dt>Scale</dt><dd id="rScale">—</dd></div>
+        <div><dt>Rotation</dt><dd id="rRot">—</dd></div>
+        <div><dt>Offset</dt><dd id="rOff">—</dd></div>
+        <div><dt>Match time</dt><dd id="rTime">—</dd></div>
+      </dl>
+      <p class="note" id="note"></p>
+    </section>
+
+    <details class="about">
+      <summary>About this build</summary>
+      <p>Matcher v0.1: plain JavaScript with no libraries. Everything runs on this device and images never leave it.</p>
+      <p>Known limits: matching takes a few seconds and the page pauses meanwhile (Any angle is much slower). It has only been tested on the synthetic samples here. The proportion score is sometimes missing, and photos of a tilted page aren't flattened yet.</p>
+    </details>
+  </div>
+</main>
+<script>
+/*!
+ * ImageMatch v0.1
+ * Dependency-free alignment of a drawing (B) onto a reference (A).
+ *
+ * The only transform allowed is rotation + uniform scale + translation, so the
+ * drawing's own proportion errors survive the alignment and can be measured.
+ *
+ * Written in plain ES5 with typed arrays and no platform APIs so it can be
+ * ported line-for-line to Swift, Kotlin, C or C#. No canvas, no DOM, no workers.
+ *
+ * Usage:
+ *   var r = ImageMatch.match(imageDataA, imageDataB, options);
+ *   ctx.drawImage(refImage, 0, 0);
+ *   ctx.setTransform.apply(ctx, r.matrix);   // [a, b, c, d, e, f]
+ *   ctx.drawImage(drawingImage, 0, 0);       // drawing now sits on the reference
+ *
+ * Images are {width, height, data}: RGBA bytes (like canvas ImageData) or one
+ * gray value per pixel (bytes 0..255 or floats 0..1). Transparent pixels count as white paper.
+ */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) { module.exports = api; }
+  else { root.ImageMatch = api; }
+}(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  var DEFAULTS = {
+    levelSizes: [72, 180, 480], // long side in px of the coarse, mid and fine working images
+    rotationRange: 30,          // search +/- this many degrees (180 = any rotation)
+    scaleRange: 2,              // search the initial size guess divided/multiplied by this
+    orientationBins: 8,         // edges only match edges of similar direction
+    coarsePoints: 140,          // drawing points used in the brute-force search
+    midPoints: 450,
+    finePoints: 1200,
+    reverseWeight: 0.5,         // reference->drawing term; lower it (~0.15) for unfinished drawings
+    edgeThreshold: 0.2,         // keep edges stronger than this fraction of the strong-edge level
+    minStroke: 0.025,           // drop connected edge pieces shorter than this x long side
+    borderMargin: 0.012,        // ignore edges this close to the image border (x long side)
+    candidates: 6,              // hypotheses carried from the coarse search into refinement
+    grid: 4                     // proportion map uses grid x grid cells
+  };
+
+  var PI = Math.PI;
+  var BIG = 1e20;
+
+  function merge(opts) {
+    var o = {}, k;
+    for (k in DEFAULTS) { o[k] = DEFAULTS[k]; }
+    if (opts) { for (k in opts) { if (opts[k] !== undefined) { o[k] = opts[k]; } } }
+    return o;
+  }
+  function now() {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  }
+  function mod(a, n) { a = a % n; return a < 0 ? a + n : a; }
+
+  /* ---------------------------------------------------------------- pixels */
+
+  function toGray(img) {
+    var w = img.width, h = img.height, d = img.data, n = w * h;
+    var g = new Float32Array(n), i;
+    if (d.length === n) {
+      var isFloat = (typeof Float32Array !== 'undefined' && d instanceof Float32Array) ||
+                    (typeof Float64Array !== 'undefined' && d instanceof Float64Array);
+      for (i = 0; i < n; i++) { g[i] = isFloat ? d[i] : d[i] / 255; }
+    } else {
+      for (i = 0; i < n; i++) {
+        var j = i * 4, a = d[j + 3] / 255;
+        var l = (0.2126 * d[j] + 0.7152 * d[j + 1] + 0.0722 * d[j + 2]) / 255;
+        g[i] = a * l + (1 - a);
+      }
+    }
+    return { w: w, h: h, g: g };
+  }
+
+  // Area-average resample of the source rect (rx, ry, rw, rh) into nw x nh.
+  // Anything outside the source reads as `fill` (white paper).
+  function resample(src, sw, sh, rx, ry, rw, rh, nw, nh, fill) {
+    var sx = rw / nw, sy = rh / nh;
+    var yA = Math.floor(ry), yB = Math.ceil(ry + rh), th = yB - yA;
+    var tmp = new Float32Array(nw * th), out = new Float32Array(nw * nh);
+    var x, y, i, j;
+    for (x = 0; x < nw; x++) {
+      var x0 = rx + x * sx, x1 = x0 + sx, i0 = Math.floor(x0), i1 = Math.ceil(x1);
+      for (var yy = 0; yy < th; yy++) {
+        y = yA + yy;
+        var rowOk = y >= 0 && y < sh, row = y * sw, acc = 0;
+        for (i = i0; i < i1; i++) {
+          var a = x0 > i ? x0 : i, b = x1 < i + 1 ? x1 : i + 1;
+          if (b <= a) { continue; }
+          acc += ((rowOk && i >= 0 && i < sw) ? src[row + i] : fill) * (b - a);
+        }
+        tmp[yy * nw + x] = acc / sx;
+      }
+    }
+    for (y = 0; y < nh; y++) {
+      var y0 = ry + y * sy, y1 = y0 + sy, j0 = Math.floor(y0), j1 = Math.ceil(y1);
+      for (x = 0; x < nw; x++) {
+        var acc2 = 0;
+        for (j = j0; j < j1; j++) {
+          var a2 = y0 > j ? y0 : j, b2 = y1 < j + 1 ? y1 : j + 1;
+          if (b2 <= a2) { continue; }
+          acc2 += tmp[(j - yA) * nw + x] * (b2 - a2);
+        }
+        out[y * nw + x] = acc2 / sy;
+      }
+    }
+    return out;
+  }
+
+  function blur(src, w, h, sigma) {
+    var n = w * h, out = new Float32Array(n);
+    if (sigma <= 0) { for (var q = 0; q < n; q++) { out[q] = src[q]; } return out; }
+    var r = Math.ceil(sigma * 3), k = new Float32Array(2 * r + 1), s = 0, i, x, y;
+    for (i = -r; i <= r; i++) { k[i + r] = Math.exp(-i * i / (2 * sigma * sigma)); s += k[i + r]; }
+    for (i = 0; i < k.length; i++) { k[i] /= s; }
+    var tmp = new Float32Array(n);
+    for (y = 0; y < h; y++) {
+      for (x = 0; x < w; x++) {
+        var acc = 0;
+        for (i = -r; i <= r; i++) {
+          var xx = x + i; if (xx < 0) { xx = 0; } else if (xx >= w) { xx = w - 1; }
+          acc += k[i + r] * src[y * w + xx];
+        }
+        tmp[y * w + x] = acc;
+      }
+    }
+    for (y = 0; y < h; y++) {
+      for (x = 0; x < w; x++) {
+        var acc2 = 0;
+        for (i = -r; i <= r; i++) {
+          var yy = y + i; if (yy < 0) { yy = 0; } else if (yy >= h) { yy = h - 1; }
+          acc2 += k[i + r] * tmp[yy * w + x];
+        }
+        out[y * w + x] = acc2;
+      }
+    }
+    return out;
+  }
+
+  /* ----------------------------------------------------------------- edges */
+
+  // Returns thin, de-noised edges. Each edge pixel carries a weight that favours
+  // strong contrast and long connected strokes, so the strongest structure wins.
+  function detectEdges(img, w, h, sigma, o) {
+    var g = blur(img, w, h, sigma);
+    var n = w * h, mag = new Float32Array(n), ori = new Float32Array(n);
+    var x, y, i, longSide = Math.max(w, h);
+    var bm = Math.max(1, Math.round(o.borderMargin * longSide));
+
+    for (y = 1; y < h - 1; y++) {
+      for (x = 1; x < w - 1; x++) {
+        i = y * w + x;
+        var a00 = g[i - w - 1], a01 = g[i - w], a02 = g[i - w + 1];
+        var a10 = g[i - 1], a12 = g[i + 1];
+        var a20 = g[i + w - 1], a21 = g[i + w], a22 = g[i + w + 1];
+        var gx = (a02 + 2 * a12 + a22 - a00 - 2 * a10 - a20) * 0.125;
+        var gy = (a20 + 2 * a21 + a22 - a00 - 2 * a01 - a02) * 0.125;
+        mag[i] = Math.sqrt(gx * gx + gy * gy);
+        var t = Math.atan2(gy, gx);
+        if (t < 0) { t += PI; }
+        if (t >= PI) { t -= PI; }
+        ori[i] = t;
+      }
+    }
+
+    // Non-maximum suppression: keep only the ridge of each edge (1 px wide).
+    var keep = new Uint8Array(n), maxM = 0, kept = 0;
+    for (y = bm; y < h - bm; y++) {
+      for (x = bm; x < w - bm; x++) {
+        i = y * w + x;
+        var m = mag[i];
+        if (m < 1e-3) { continue; }
+        var t2 = ori[i], dx, dy;
+        if (t2 < PI / 8 || t2 >= 7 * PI / 8) { dx = 1; dy = 0; }
+        else if (t2 < 3 * PI / 8) { dx = 1; dy = 1; }
+        else if (t2 < 5 * PI / 8) { dx = 0; dy = 1; }
+        else { dx = -1; dy = 1; }
+        if (m >= mag[i + dy * w + dx] && m > mag[i - dy * w - dx]) {
+          keep[i] = 1; kept++;
+          if (m > maxM) { maxM = m; }
+        }
+      }
+    }
+
+    // Strong-edge level = 95th percentile of surviving magnitudes (histogram).
+    var strong = maxM;
+    if (kept > 0 && maxM > 0) {
+      var hist = new Float64Array(512);
+      for (i = 0; i < n; i++) { if (keep[i]) { hist[Math.min(511, (mag[i] / maxM * 511) | 0)] += 1; } }
+      var target = kept * 0.95, acc = 0;
+      for (var b = 0; b < 512; b++) { acc += hist[b]; if (acc >= target) { strong = (b + 1) / 512 * maxM; break; } }
+    }
+    var thr = Math.max(o.edgeThreshold * strong, 0.006);
+    for (i = 0; i < n; i++) { if (keep[i] && mag[i] < thr) { keep[i] = 0; } }
+
+    // Connected pieces (gaps up to 1 px bridged). Short pieces are specks/texture: drop them.
+    var minLen = Math.max(2, Math.round(o.minStroke * longSide));
+    var refLen = Math.max(minLen + 1, 0.12 * longSide);
+    var comp = new Int32Array(n), seen = new Uint8Array(n);
+    var stack = new Int32Array(n), members = new Int32Array(n);
+    for (i = 0; i < n; i++) {
+      if (!keep[i] || seen[i]) { continue; }
+      var sp = 0, mc = 0;
+      stack[sp++] = i; seen[i] = 1;
+      while (sp > 0) {
+        var p = stack[--sp];
+        members[mc++] = p;
+        var px = p % w, py = (p - px) / w;
+        for (var ny = py - 2; ny <= py + 2; ny++) {
+          if (ny < 0 || ny >= h) { continue; }
+          for (var nx = px - 2; nx <= px + 2; nx++) {
+            if (nx < 0 || nx >= w) { continue; }
+            var q = ny * w + nx;
+            if (keep[q] && !seen[q]) { seen[q] = 1; stack[sp++] = q; }
+          }
+        }
+      }
+      for (var k = 0; k < mc; k++) {
+        if (mc < minLen) { keep[members[k]] = 0; } else { comp[members[k]] = mc; }
+      }
+    }
+
+    var bins = o.orientationBins, binW = PI / bins, count = 0;
+    for (i = 0; i < n; i++) { if (keep[i]) { count++; } }
+    var ex = new Float32Array(count), ey = new Float32Array(count);
+    var eb = new Float32Array(count), ew = new Float32Array(count), e = 0;
+    for (i = 0; i < n; i++) {
+      if (!keep[i]) { continue; }
+      ex[e] = i % w; ey[e] = (i / w) | 0; eb[e] = ori[i] / binW;
+      ew[e] = Math.min(1, mag[i] / strong) * Math.min(1, comp[i] / refLen);
+      e++;
+    }
+    return { n: count, x: ex, y: ey, b: eb, wt: ew };
+  }
+
+  // Weighted percentile box of the edges (robust to a few stray marks).
+  function weightedBox(E, w, h, lo, hi) {
+    var cx = new Float64Array(w), cy = new Float64Array(h), tot = 0, i;
+    for (i = 0; i < E.n; i++) { cx[E.x[i] | 0] += E.wt[i]; cy[E.y[i] | 0] += E.wt[i]; tot += E.wt[i]; }
+    if (tot <= 0) { return { x0: 0, y0: 0, x1: w - 1, y1: h - 1 }; }
+    return { x0: pct(cx, tot, lo), x1: pct(cx, tot, hi), y0: pct(cy, tot, lo), y1: pct(cy, tot, hi) };
+  }
+  function pct(hist, tot, q) {
+    var t = tot * q, acc = 0;
+    for (var i = 0; i < hist.length; i++) { acc += hist[i]; if (acc >= t) { return i; } }
+    return hist.length - 1;
+  }
+
+  /* ------------------------------------------------------ distance transform */
+
+  // Exact Euclidean distance transform (Felzenszwalb & Huttenlocher).
+  function edt1d(f, n, d, v, z) {
+    var k = 0, q, s;
+    v[0] = 0; z[0] = -BIG; z[1] = BIG;
+    for (q = 1; q < n; q++) {
+      s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      while (s <= z[k]) {
+        k--;
+        s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      }
+      k++; v[k] = q; z[k] = s; z[k + 1] = BIG;
+    }
+    k = 0;
+    for (q = 0; q < n; q++) {
+      while (z[k + 1] < q) { k++; }
+      var dq = q - v[k];
+      d[q] = dq * dq + f[v[k]];
+    }
+  }
+  function edt2d(f, w, h) {
+    var n = Math.max(w, h), col = new Float64Array(n), d = new Float64Array(n);
+    var v = new Int32Array(n), z = new Float64Array(n + 1), x, y;
+    for (x = 0; x < w; x++) {
+      for (y = 0; y < h; y++) { col[y] = f[y * w + x]; }
+      edt1d(col, h, d, v, z);
+      for (y = 0; y < h; y++) { f[y * w + x] = d[y]; }
+    }
+    for (y = 0; y < h; y++) {
+      for (x = 0; x < w; x++) { col[x] = f[y * w + x]; }
+      edt1d(col, w, d, v, z);
+      for (x = 0; x < w; x++) { f[y * w + x] = d[x]; }
+    }
+  }
+  // One distance map per orientation channel. Channel c holds edges whose
+  // direction is within one bin of c, so a point only "snaps" to similar edges.
+  function buildDT(E, w, h, bins, maxD) {
+    var n = w * h, dt = new Float32Array(bins * n), f = new Float64Array(n), i, c;
+    for (c = 0; c < bins; c++) {
+      for (i = 0; i < n; i++) { f[i] = BIG; }
+      var any = false;
+      for (i = 0; i < E.n; i++) {
+        var b = mod(Math.round(E.b[i]), bins);
+        if (mod(b - c + 1, bins) <= 2) { f[(E.y[i] | 0) * w + (E.x[i] | 0)] = 0; any = true; }
+      }
+      var off = c * n;
+      if (!any) { for (i = 0; i < n; i++) { dt[off + i] = maxD; } continue; }
+      edt2d(f, w, h);
+      for (i = 0; i < n; i++) { var dd = Math.sqrt(f[i]); dt[off + i] = dd < maxD ? dd : maxD; }
+    }
+    return dt;
+  }
+
+  /* --------------------------------------------------------------- sampling */
+
+  // Spread points over the image: keep the strongest edge pixel in each grid cell.
+  function samplePoints(E, w, h, N) {
+    var idx = [], i;
+    if (N <= 0 || E.n === 0) { idx = []; }
+    else if (E.n <= N) { for (i = 0; i < E.n; i++) { idx.push(i); } }
+    else {
+      var c = 1;
+      for (;;) {
+        var cw = Math.ceil(w / c), ch = Math.ceil(h / c), best = new Int32Array(cw * ch);
+        for (i = 0; i < best.length; i++) { best[i] = -1; }
+        for (i = 0; i < E.n; i++) {
+          var cell = ((E.y[i] / c) | 0) * cw + ((E.x[i] / c) | 0), bi = best[cell];
+          if (bi < 0 || E.wt[i] > E.wt[bi]) { best[cell] = i; }
+        }
+        idx = [];
+        for (i = 0; i < best.length; i++) { if (best[i] >= 0) { idx.push(best[i]); } }
+        if (idx.length <= N * 1.1) { break; }
+        c += Math.max(1, Math.floor(c * 0.3));
+      }
+    }
+    idx.sort(function (a, b) { return E.wt[b] - E.wt[a]; });
+    var m = idx.length, P = { n: m, x: new Float32Array(m), y: new Float32Array(m),
+      b: new Float32Array(m), wt: new Float32Array(m), wsum: 0 };
+    for (i = 0; i < m; i++) {
+      var j = idx[i];
+      P.x[i] = E.x[j]; P.y[i] = E.y[j]; P.b[i] = E.b[j]; P.wt[i] = E.wt[j]; P.wsum += E.wt[j];
+    }
+    return P;
+  }
+
+  /* ----------------------------------------------------------------- levels */
+
+  function makeSide(G, rect, size, sigma, o, nPts, withDT, maxD) {
+    var k = size / Math.max(rect.w, rect.h);
+    var w = Math.max(8, Math.round(rect.w * k)), h = Math.max(8, Math.round(rect.h * k));
+    var img = resample(G.g, G.w, G.h, rect.x, rect.y, w / k, h / k, w, h, 1.0);
+    var E = detectEdges(img, w, h, sigma, o);
+    var side = { k: k, ox: rect.x, oy: rect.y, w: w, h: h, edges: E };
+    side.pts = samplePoints(E, w, h, nPts);
+    if (withDT) { side.dt = buildDT(E, w, h, o.orientationBins, maxD); }
+    return side;
+  }
+
+  // Robust content box in original pixels, from a quick preview.
+  function contentBox(G, o) {
+    var s = makeSide(G, { x: 0, y: 0, w: G.w, h: G.h }, 256, 1.0, o, 0, false, 0);
+    var bx = weightedBox(s.edges, s.w, s.h, 0.03, 0.97);
+    return { x0: (bx.x0 + 0.5) / s.k, y0: (bx.y0 + 0.5) / s.k, x1: (bx.x1 + 0.5) / s.k, y1: (bx.y1 + 0.5) / s.k,
+      edges: s.edges.n };
+  }
+
+  function prepare(imgA, imgB, opts) {
+    var o = merge(opts), t0 = now();
+    var GA = toGray(imgA), GB = toGray(imgB);
+    var boxA = contentBox(GA, o), boxB = contentBox(GB, o);
+    // Crop the drawing around its content so a small sketch on a big page still gets pixels.
+    var bw = boxB.x1 - boxB.x0, bh = boxB.y1 - boxB.y0, pad = 0.02 * Math.max(GB.w, GB.h);
+    var cx0 = Math.max(0, boxB.x0 - 0.12 * bw - pad), cy0 = Math.max(0, boxB.y0 - 0.12 * bh - pad);
+    var cx1 = Math.min(GB.w, boxB.x1 + 0.12 * bw + pad), cy1 = Math.min(GB.h, boxB.y1 + 0.12 * bh + pad);
+    if (cx1 - cx0 < 0.05 * GB.w || cy1 - cy0 < 0.05 * GB.h) { cx0 = 0; cy0 = 0; cx1 = GB.w; cy1 = GB.h; }
+    var crop = { x: Math.floor(cx0), y: Math.floor(cy0), w: Math.ceil(cx1) - Math.floor(cx0), h: Math.ceil(cy1) - Math.floor(cy0) };
+
+    var sigmas = [0.8, 1.0, 1.4], pts = [o.coarsePoints, o.midPoints, o.finePoints], levels = [];
+    for (var li = 0; li < 3; li++) {
+      var size = o.levelSizes[li], maxD = 0.05 * size + 2;
+      var LA = makeSide(GA, { x: 0, y: 0, w: GA.w, h: GA.h }, size, sigmas[li], o, li === 0 ? 0 : pts[li], true, maxD);
+      var LB = makeSide(GB, crop, size, sigmas[li], o, pts[li], li > 0, maxD);
+      LB.box = { x0: (boxB.x0 - crop.x) * LB.k - 0.5, y0: (boxB.y0 - crop.y) * LB.k - 0.5,
+                 x1: (boxB.x1 - crop.x) * LB.k - 0.5, y1: (boxB.y1 - crop.y) * LB.k - 0.5 };
+      LB.cx = 0.5 * (LB.box.x0 + LB.box.x1); LB.cy = 0.5 * (LB.box.y0 + LB.box.y1);
+      LA.box = { x0: boxA.x0 * LA.k - 0.5, y0: boxA.y0 * LA.k - 0.5, x1: boxA.x1 * LA.k - 0.5, y1: boxA.y1 * LA.k - 0.5 };
+      levels.push({ A: LA, B: LB, size: size });
+    }
+    return { o: o, A: { w: GA.w, h: GA.h }, B: { w: GB.w, h: GB.h }, crop: crop, boxA: boxA, boxB: boxB,
+      levels: levels, prepareMs: now() - t0 };
+  }
+
+  /* ------------------------------------------------------------ transforms */
+  // Canonical params P = {scale, theta, tx, ty}: pA = scale * R(theta) * pB + t, in original pixels.
+  // Level pose p = {s, th, tx, ty} does the same in a level's pixel-centre coordinates.
+
+  function toLevel(P, L) {
+    var A = L.A, B = L.B, c = Math.cos(P.theta), sn = Math.sin(P.theta);
+    var s = A.k * P.scale / B.k;
+    return { s: s, th: P.theta,
+      tx: A.k * (P.scale * (c * B.ox - sn * B.oy) + P.tx - A.ox) + s * (c * 0.5 - sn * 0.5) - 0.5,
+      ty: A.k * (P.scale * (sn * B.ox + c * B.oy) + P.ty - A.oy) + s * (sn * 0.5 + c * 0.5) - 0.5 };
+  }
+  function fromLevel(p, L) {
+    var A = L.A, B = L.B, c = Math.cos(p.th), sn = Math.sin(p.th), S = p.s * B.k / A.k;
+    return { scale: S, theta: p.th,
+      tx: (p.tx - p.s * (c * 0.5 - sn * 0.5) + 0.5) / A.k - S * (c * B.ox - sn * B.oy) + A.ox,
+      ty: (p.ty - p.s * (sn * 0.5 + c * 0.5) + 0.5) / A.k - S * (sn * B.ox + c * B.oy) + A.oy };
+  }
+  // Pose around the drawing's content centre: q = [mx, my, theta, log scale].
+  function poseToQ(p, B) {
+    var c = Math.cos(p.th), sn = Math.sin(p.th);
+    return [p.s * (c * B.cx - sn * B.cy) + p.tx, p.s * (sn * B.cx + c * B.cy) + p.ty, p.th, Math.log(p.s)];
+  }
+  function qToPose(q, B) {
+    var s = Math.exp(q[3]), c = Math.cos(q[2]), sn = Math.sin(q[2]);
+    return { s: s, th: q[2], tx: q[0] - s * (c * B.cx - sn * B.cy), ty: q[1] - s * (sn * B.cx + c * B.cy) };
+  }
+
+  /* ------------------------------------------------------------------ costs */
+
+  function dtAt(dt, W, H, off, x, y, cap) {
+    if (x < 0 || y < 0 || x > W - 1 || y > H - 1) { return cap; }
+    var x0 = x | 0, y0 = y | 0, fx = x - x0, fy = y - y0;
+    var x1 = x0 < W - 1 ? x0 + 1 : x0, y1 = y0 < H - 1 ? y0 + 1 : y0;
+    var r0 = off + y0 * W, r1 = off + y1 * W;
+    var v = (dt[r0 + x0] * (1 - fx) + dt[r0 + x1] * fx) * (1 - fy) +
+            (dt[r1 + x0] * (1 - fx) + dt[r1 + x1] * fx) * fy;
+    return v < cap ? v : cap;
+  }
+
+  // Truncated, direction-aware chamfer cost in [0, 1]. Truncation is what makes it
+  // robust: a stray mark or missing part can only cost `tau`, never drag the fit.
+  function poseCost(L, p, tau, lambda, bins) {
+    var A = L.A, B = L.B, P = B.pts, c = Math.cos(p.th), sn = Math.sin(p.th), s = p.s;
+    var rot = p.th / (PI / bins), WH = A.w * A.h, sum = 0, i;
+    for (i = 0; i < P.n; i++) {
+      var x = P.x[i], y = P.y[i];
+      var X = s * (c * x - sn * y) + p.tx, Y = s * (sn * x + c * y) + p.ty;
+      var ch = mod(Math.round(P.b[i] + rot), bins);
+      sum += P.wt[i] * dtAt(A.dt, A.w, A.h, ch * WH, X, Y, tau);
+    }
+    var fwd = P.wsum > 0 ? sum / (P.wsum * tau) : 1;
+    if (!(lambda > 0) || !B.dt || A.pts.n === 0) { return fwd; }
+    // Reverse term: reference edges that fall inside the drawing's area should be drawn.
+    // Measured in the drawing's own pixels, so shrinking the drawing to a speck never pays off.
+    var Q = A.pts, inv = 1 / s, bx = B.box, WHb = B.w * B.h, rsum = 0, rw = 0;
+    var mx = 0.05 * (bx.x1 - bx.x0), my = 0.05 * (bx.y1 - bx.y0);
+    for (i = 0; i < Q.n; i++) {
+      var u = Q.x[i] - p.tx, v = Q.y[i] - p.ty;
+      var xb = inv * (c * u + sn * v), yb = inv * (-sn * u + c * v);
+      if (xb < bx.x0 - mx || xb > bx.x1 + mx || yb < bx.y0 - my || yb > bx.y1 + my) { continue; }
+      var ch2 = mod(Math.round(Q.b[i] - rot), bins);
+      rsum += Q.wt[i] * dtAt(B.dt, B.w, B.h, ch2 * WHb, xb, yb, tau);
+      rw += Q.wt[i];
+    }
+    var rev = rw > 0 ? rsum / (rw * tau) : 1;
+    return (fwd + lambda * rev) / (1 + lambda);
+  }
+
+  /* ----------------------------------------------------------------- search */
+
+  // Brute force over rotation x scale x position on the coarse level.
+  // Poses closest to the initial guess go first; each scale band keeps its own
+  // shortlist, and positions that cannot beat that shortlist are abandoned early.
+  function coarseSearch(prep) {
+    var o = prep.o, L = prep.levels[0], A = L.A, B = L.B, P = B.pts, bins = o.orientationBins;
+    var W = A.w, H = A.h, WH = W * H, dt = A.dt, n = P.n, binW = PI / bins, i;
+    var tau = Math.max(2, 0.035 * L.size);
+    var R = 0.5 * Math.sqrt(Math.pow(B.box.x1 - B.box.x0, 2) + Math.pow(B.box.y1 - B.box.y0, 2)) + 1;
+    var dA = Math.sqrt(Math.pow(A.box.x1 - A.box.x0, 2) + Math.pow(A.box.y1 - A.box.y0, 2)) + 1;
+    var s0 = dA / (2 * R), reach = R * s0, move = 1.6;
+
+    var thetas = [], lss = [];
+    var dth = Math.max(Math.atan2(move, reach), 0.5 * PI / 180);
+    if (o.rotationRange >= 180) {
+      var nFull = Math.ceil(2 * PI / dth);
+      dth = 2 * PI / nFull;
+      for (i = 0; i < nFull; i++) { thetas.push(-PI + i * dth); }
+    } else {
+      var rng = o.rotationRange * PI / 180, nT = Math.max(1, Math.ceil(rng / dth));
+      dth = rng / nT;
+      for (i = -nT; i <= nT; i++) { thetas.push(i * dth); }
+    }
+    var lr = Math.log(Math.max(1.0001, o.scaleRange)), dls = Math.max(move / reach, 0.012);
+    var nS = Math.max(1, Math.ceil(lr / dls));
+    dls = lr / nS;
+    for (i = -nS; i <= nS; i++) { lss.push(i * dls); }
+
+    // Visit poses nearest the guess (no rotation, guessed size) first.
+    var order = [];
+    for (var a = 0; a < thetas.length; a++) {
+      for (var b = 0; b < lss.length; b++) {
+        var ta = Math.abs(mod(thetas[a] + PI, 2 * PI) - PI) / dth;
+        order.push({ a: a, b: b, key: ta + Math.abs(lss[b]) / dls });
+      }
+    }
+    order.sort(function (p, q) { return p.key - q.key; });
+
+    var BANDS = 4, KEEP = Math.max(3, o.candidates), bandLists = [];
+    for (i = 0; i < BANDS; i++) { bandLists.push([]); }
+    function bandOf(bi) { return Math.min(BANDS - 1, Math.floor(bi / lss.length * BANDS)); }
+    function bound(list) { return list.length < KEEP ? Infinity : list[list.length - 1].sum; }
+    function insert(list, c) {
+      var k = list.length;
+      list.push(c);
+      while (k > 0 && list[k - 1].sum > c.sum) { list[k] = list[k - 1]; k--; }
+      list[k] = c;
+      if (list.length > KEEP * 3) { list.pop(); }
+    }
+
+    var rx = new Int32Array(n), ry = new Int32Array(n), off = new Int32Array(n), wt = P.wt;
+    var margin = Math.round(0.15 * Math.max(W, H));
+    function evalAt(mx, my, limit) {
+      var sum = 0;
+      for (var j = 0; j < n; j++) {
+        var xx = rx[j] + mx, yy = ry[j] + my, d;
+        if (xx < 0 || yy < 0 || xx >= W || yy >= H) { d = tau; }
+        else { d = dt[off[j] + yy * W + xx]; if (d > tau) { d = tau; } }
+        sum += wt[j] * d;
+        if (sum >= limit) { return sum; }
+      }
+      return sum;
+    }
+    for (var oi = 0; oi < order.length; oi++) {
+      var th = thetas[order[oi].a], bi = order[oi].b, list = bandLists[bandOf(bi)];
+      var c = Math.cos(th), sn = Math.sin(th), s = s0 * Math.exp(lss[bi]);
+      for (i = 0; i < n; i++) {
+        var dx = P.x[i] - B.cx, dy = P.y[i] - B.cy;
+        rx[i] = Math.round(s * (c * dx - sn * dy));
+        ry[i] = Math.round(s * (sn * dx + c * dy));
+        off[i] = mod(Math.round(P.b[i] + th / binW), bins) * WH;
+      }
+      // Anything worse than this band's shortlist (with slack) is not worth finishing.
+      var cap = bound(list) * 1.15, best = cap, bmx = 0, bmy = 0, mx, my, v, found = false;
+      for (my = -margin; my < H + margin; my += 2) {
+        for (mx = -margin; mx < W + margin; mx += 2) {
+          v = evalAt(mx, my, best);
+          if (v < best) { best = v; bmx = mx; bmy = my; found = true; }
+        }
+      }
+      if (!found) { continue; }
+      var cx = bmx, cy = bmy;
+      for (my = cy - 1; my <= cy + 1; my++) {
+        for (mx = cx - 1; mx <= cx + 1; mx++) {
+          if (mx === cx && my === cy) { continue; }
+          v = evalAt(mx, my, best);
+          if (v < best) { best = v; bmx = mx; bmy = my; }
+        }
+      }
+      insert(list, { th: th, ls: Math.log(s), mx: bmx, my: bmy, sum: best, cost: best / (P.wsum * tau) });
+    }
+
+    // Merge: overall best hypotheses plus the best of every scale band, without near-duplicates.
+    var all = [];
+    for (i = 0; i < BANDS; i++) { all = all.concat(bandLists[i]); }
+    all.sort(function (p, q) { return p.cost - q.cost; });
+    function isDup(cd, kept) {
+      for (var k = 0; k < kept.length; k++) {
+        var kp = kept[k], dAng = Math.abs(mod(cd.th - kp.th + PI, 2 * PI) - PI);
+        if (dAng < 2.5 * dth && Math.abs(cd.ls - kp.ls) < 2.5 * dls &&
+            Math.abs(cd.mx - kp.mx) + Math.abs(cd.my - kp.my) < 5) { return true; }
+      }
+      return false;
+    }
+    var kept = [];
+    for (i = 0; i < all.length && kept.length < o.candidates; i++) { if (!isDup(all[i], kept)) { kept.push(all[i]); } }
+    for (var bb = 0; bb < BANDS; bb++) {
+      var bl = bandLists[bb];
+      for (i = 0; i < bl.length; i++) { if (!isDup(bl[i], kept)) { kept.push(bl[i]); break; } }
+    }
+    return { cands: kept, dth: dth, dls: dls, poses: order.length,
+      lsMin: Math.log(s0) - lr - 0.15, lsMax: Math.log(s0) + lr + 0.15 };
+  }
+
+  // Compass search on [mx, my, theta, log scale]. Local, derivative-free, portable.
+  function localRefine(L, pose, tau, lambda, steps, bins, lsLim) {
+    var B = L.B, q = poseToQ(pose, B), st = steps.slice(), best = poseCost(L, pose, tau, lambda, bins);
+    for (var it = 0; it < 400; it++) {
+      var improved = false;
+      for (var d = 0; d < 4; d++) {
+        for (var sg = -1; sg <= 1; sg += 2) {
+          var old = q[d];
+          q[d] = old + sg * st[d];
+          if (d === 3 && lsLim && (q[3] < lsLim[0] || q[3] > lsLim[1])) { q[d] = old; continue; }
+          var c = poseCost(L, qToPose(q, B), tau, lambda, bins);
+          if (c < best - 1e-7) { best = c; improved = true; } else { q[d] = old; }
+        }
+      }
+      if (!improved) {
+        for (var e = 0; e < 4; e++) { st[e] *= 0.5; }
+        if (st[0] < 0.05) { break; }
+      }
+    }
+    return { pose: qToPose(q, B), cost: best };
+  }
+
+  function inlierFraction(L, pose, bins) {
+    var A = L.A, P = L.B.pts, c = Math.cos(pose.th), sn = Math.sin(pose.th), s = pose.s;
+    var rot = pose.th / (PI / bins), WH = A.w * A.h, lim = Math.max(1.5, 0.01 * L.size), inW = 0;
+    for (var i = 0; i < P.n; i++) {
+      var X = s * (c * P.x[i] - sn * P.y[i]) + pose.tx, Y = s * (sn * P.x[i] + c * P.y[i]) + pose.ty;
+      var ch = mod(Math.round(P.b[i] + rot), bins);
+      if (dtAt(A.dt, A.w, A.h, ch * WH, X, Y, 1e9) <= lim) { inW += P.wt[i]; }
+    }
+    return P.wsum > 0 ? inW / P.wsum : 0;
+  }
+
+  function fineStages(prep, P, startScale, lsLim) {
+    var o = prep.o, bins = o.orientationBins, L1 = prep.levels[1], L2 = prep.levels[2];
+    var lam = o.reverseWeight, f = startScale || 1;
+    var p1 = toLevel(P, L1);
+    var r1 = localRefine(L1, p1, Math.max(2.5, 0.025 * L1.size), lam, [2 * f, 2 * f, 0.02 * f, 0.02 * f], bins, lsLim);
+    var p2 = toLevel(fromLevel(r1.pose, L1), L2);
+    var r2 = localRefine(L2, p2, 0.022 * L2.size, lam, [2, 2, 0.006, 0.006], bins, lsLim);
+    var r3 = localRefine(L2, r2.pose, Math.max(3, 0.011 * L2.size), lam, [1, 1, 0.003, 0.003], bins, lsLim);
+    return { P: fromLevel(r3.pose, L2), cost: r3.cost, midCost: r1.cost, quality: inlierFraction(L2, r3.pose, bins) };
+  }
+
+  function search(prep) {
+    var t0 = now(), o = prep.o, L0 = prep.levels[0], L1 = prep.levels[1], bins = o.orientationBins, i;
+    if (L0.B.pts.n < 8 || L0.A.edges.n < 8) {
+      return finish(null, { error: 'Not enough edges found in ' + (L0.B.pts.n < 8 ? 'the drawing' : 'the reference') });
+    }
+    var cs = coarseSearch(prep), mids = [], lsLim = [cs.lsMin, cs.lsMax];
+    for (i = 0; i < cs.cands.length; i++) {
+      var cd = cs.cands[i], s = Math.exp(cd.ls), c = Math.cos(cd.th), sn = Math.sin(cd.th), B = L0.B;
+      var pose = { s: s, th: cd.th, tx: cd.mx - s * (c * B.cx - sn * B.cy), ty: cd.my - s * (sn * B.cx + c * B.cy) };
+      var P0 = fromLevel(pose, L0);
+      var r = localRefine(L1, toLevel(P0, L1), Math.max(2.5, 0.025 * L1.size), o.reverseWeight,
+        [2, 2, cs.dth / 2, cs.dls / 2], bins, lsLim);
+      mids.push({ P: fromLevel(r.pose, L1), cost: r.cost, coarse: cd.cost });
+    }
+    mids.sort(function (a, b) { return a.cost - b.cost; });
+    var finals = [];
+    for (i = 0; i < Math.min(3, mids.length); i++) {
+      var fr = fineStages(prep, mids[i].P, 0.5, lsLim);
+      finals.push(fr);
+    }
+    finals.sort(function (a, b) { return a.cost - b.cost; });
+    var best = finals[0], second = null;
+    for (i = 1; i < finals.length; i++) {
+      if (distinct(prep, best.P, finals[i].P)) { second = finals[i]; break; }
+    }
+    return finish(best.P, {
+      cost: best.cost, quality: best.quality,
+      ambiguity: second ? best.cost / second.cost : 0,
+      poses: cs.poses, searchMs: now() - t0
+    });
+  }
+
+  function distinct(prep, P, Q) {
+    var bx = prep.boxB, cx = 0.5 * (bx.x0 + bx.x1), cy = 0.5 * (bx.y0 + bx.y1);
+    var a = apply(P, cx, cy), b = apply(Q, cx, cy);
+    var diag = Math.sqrt(Math.pow(bx.x1 - bx.x0, 2) + Math.pow(bx.y1 - bx.y0, 2)) * P.scale;
+    return Math.sqrt(Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2)) > 0.03 * diag ||
+      Math.abs(P.theta - Q.theta) > 3 * PI / 180 || Math.abs(Math.log(P.scale / Q.scale)) > 0.04;
+  }
+
+  function apply(P, x, y) {
+    var c = Math.cos(P.theta), sn = Math.sin(P.theta);
+    return [P.scale * (c * x - sn * y) + P.tx, P.scale * (sn * x + c * y) + P.ty];
+  }
+
+  function finish(P, extra) {
+    var r = {}, k;
+    if (P) {
+      var c = Math.cos(P.theta), sn = Math.sin(P.theta);
+      r.scale = P.scale; r.theta = P.theta; r.rotation = P.theta * 180 / PI; r.tx = P.tx; r.ty = P.ty;
+      r.matrix = [P.scale * c, P.scale * sn, -P.scale * sn, P.scale * c, P.tx, P.ty];
+    }
+    for (k in extra) { r[k] = extra[k]; }
+    return r;
+  }
+
+  // Snap from a user-placed position (e.g. after manual nudging).
+  function refine(prep, P) {
+    var ls = Math.log(toLevel(P, prep.levels[1]).s);
+    var fr = fineStages(prep, { scale: P.scale, theta: P.theta, tx: P.tx, ty: P.ty }, 1, [ls - 0.25, ls + 0.25]);
+    return finish(fr.P, { cost: fr.cost, quality: fr.quality });
+  }
+
+  /* --------------------------------------------------------------- analysis */
+
+  // Proportion map: for each region of the drawing, how far would it have to move
+  // (on the reference) to sit on the matching edges? Global alignment stays fixed.
+  function analyze(prep, P) {
+    var o = prep.o, bins = o.orientationBins, L = prep.levels[2], A = L.A, B = L.B, E = B.edges;
+    var pose = toLevel(P, L), c = Math.cos(pose.th), sn = Math.sin(pose.th), s = pose.s;
+    var rot = pose.th / (PI / bins), WH = A.w * A.h;
+    var tau = Math.max(2, 0.012 * L.size), rad = Math.max(3, Math.round(0.06 * L.size));
+    var G = o.grid, bx = B.box, cw = (bx.x1 - bx.x0) / G, chh = (bx.y1 - bx.y0) / G;
+    var figDiag = s * Math.sqrt(Math.pow(bx.x1 - bx.x0, 2) + Math.pow(bx.y1 - bx.y0, 2));
+    var buckets = [], i, j;
+    for (i = 0; i < G * G; i++) { buckets.push([]); }
+    for (i = 0; i < E.n; i++) {
+      var gx = Math.floor((E.x[i] - bx.x0) / cw), gy = Math.floor((E.y[i] - bx.y0) / chh);
+      if (gx < 0 || gy < 0 || gx >= G || gy >= G) { continue; }
+      buckets[gy * G + gx].push(i);
+    }
+    var cells = [], sq = 0, sw = 0, inAll = 0, wAll = 0, lim = Math.max(1.5, 0.01 * L.size);
+    for (j = 0; j < buckets.length; j++) {
+      var bk = buckets[j];
+      if (bk.length < 12) { continue; }
+      bk.sort(function (a, b) { return E.wt[b] - E.wt[a]; });
+      var m = Math.min(160, bk.length), X = new Float32Array(m), Y = new Float32Array(m);
+      var OF = new Int32Array(m), Wt = new Float32Array(m), wsum = 0, mxs = 0, mys = 0;
+      for (i = 0; i < m; i++) {
+        var e = bk[Math.floor(i * bk.length / m)];
+        X[i] = s * (c * E.x[e] - sn * E.y[e]) + pose.tx;
+        Y[i] = s * (sn * E.x[e] + c * E.y[e]) + pose.ty;
+        OF[i] = mod(Math.round(E.b[e] + rot), bins) * WH;
+        Wt[i] = E.wt[e]; wsum += Wt[i]; mxs += Wt[i] * X[i]; mys += Wt[i] * Y[i];
+      }
+      var cellCost = function (dx, dy) {
+        var sum = 0;
+        for (var k = 0; k < m; k++) { sum += Wt[k] * dtAt(A.dt, A.w, A.h, OF[k], X[k] + dx, Y[k] + dy, tau); }
+        return sum / (wsum * tau);
+      };
+      var base = cellCost(0, 0), best = base + 0, bdx = 0, bdy = 0, dx, dy, v;
+      for (dy = -rad; dy <= rad; dy += 2) {
+        for (dx = -rad; dx <= rad; dx += 2) {
+          v = cellCost(dx, dy) + 0.05 * Math.sqrt(dx * dx + dy * dy) / rad;
+          if (v < best) { best = v; bdx = dx; bdy = dy; }
+        }
+      }
+      var step = 1;
+      while (step >= 0.25) {
+        var moved = false, ox = bdx, oy = bdy;
+        for (dy = -1; dy <= 1; dy++) {
+          for (dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) { continue; }
+            var tx = ox + dx * step, ty = oy + dy * step;
+            v = cellCost(tx, ty) + 0.05 * Math.sqrt(tx * tx + ty * ty) / rad;
+            if (v < best) { best = v; bdx = tx; bdy = ty; moved = true; }
+          }
+        }
+        if (!moved) { step *= 0.5; }
+      }
+      var fit = cellCost(bdx, bdy);
+      // A shift only counts if it explains the region well and clearly beats staying put;
+      // stray marks and notes rarely do either.
+      var dmag = Math.sqrt(bdx * bdx + bdy * bdy);
+      var reliable = dmag < 1.5 ? fit < 0.5 : (fit < 0.36 && (base - fit) / base >= 0.25);
+      if (!reliable) { bdx = 0; bdy = 0; }
+      var inW = 0;
+      for (i = 0; i < m; i++) { if (dtAt(A.dt, A.w, A.h, OF[i], X[i], Y[i], 1e9) <= lim) { inW += Wt[i]; } }
+      inAll += inW; wAll += wsum;
+      var cxL = mxs / wsum, cyL = mys / wsum, dist = Math.sqrt(bdx * bdx + bdy * bdy);
+      cells.push({
+        x: A.ox + (cxL + 0.5) / A.k, y: A.oy + (cyL + 0.5) / A.k,   // region centre on the reference
+        dx: bdx / A.k, dy: bdy / A.k,                               // where it should move, reference px
+        errorPct: figDiag > 0 ? 100 * dist / figDiag : 0,
+        weight: wsum, reliable: reliable
+      });
+      var cw2 = wsum * Math.max(0, 1 - fit);
+      if (reliable) { sq += cw2 * dist * dist; sw += cw2; }
+    }
+    var rmsPct = (sw > 0 && figDiag > 0) ? 100 * Math.sqrt(sq / sw) / figDiag : 0;
+    return {
+      cells: cells,
+      rmsErrorPct: rmsPct,
+      proportionScore: sw > 0 ? Math.round(100 * Math.max(0, 1 - rmsPct / 8)) : null,
+      matchQuality: wAll > 0 ? inAll / wAll : 0
+    };
+  }
+
+  // Edge pixels the matcher actually uses (fine level), in original image pixels.
+  function edges(prep, which) {
+    var L = prep.levels[2], S = which === 'B' ? L.B : L.A, E = S.edges;
+    var out = { n: E.n, x: new Float32Array(E.n), y: new Float32Array(E.n), w: new Float32Array(E.n) };
+    for (var i = 0; i < E.n; i++) {
+      out.x[i] = S.ox + (E.x[i] + 0.5) / S.k; out.y[i] = S.oy + (E.y[i] + 0.5) / S.k; out.w[i] = E.wt[i];
+    }
+    return out;
+  }
+
+  function match(imgA, imgB, opts) {
+    var t0 = now(), prep = prepare(imgA, imgB, opts), r = search(prep);
+    if (!r.error) { r.analysis = analyze(prep, r); }
+    r.prepared = prep;
+    r.timeMs = now() - t0;
+    return r;
+  }
+
+  return {
+    DEFAULTS: DEFAULTS,
+    match: match,        // one call: prepare + search + analyze
+    prepare: prepare,    // build working images once, reuse for refine/analyze
+    search: search,
+    refine: refine,      // snap from a manual placement
+    analyze: analyze,    // proportion map for any placement {scale, theta, tx, ty}
+    edges: edges,
+    apply: apply
+  };
+}));
+
+</script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var MAX_SIDE = 1600, VIEW_MAX = 1200, OVERLAY_BLUE = [47, 127, 191];
+
+  var A = null, B = null;           // {canvas, w, h, gray, tint}
+  var prep = null, auto = null, base = null, lastRes = null, analysis = null;
+  var adj = { rot: 0, scl: 1, px: 0, py: 0 };
+  var viewMode = 'overlay', opacity = 0.85, showArrows = true;
+  var analyzeTimer = 0, drag = null;
+
+  /* ------------------------------------------------------------ images */
+
+  function fromCanvas(canvas) {
+    var img = { canvas: canvas, w: canvas.width, h: canvas.height };
+    img.gray = grayCopy(canvas);
+    img.tint = tintCopy(canvas);
+    return img;
+  }
+  function loadFile(file, done) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var im = new Image();
+      im.onload = function () {
+        var k = Math.min(1, MAX_SIDE / Math.max(im.naturalWidth, im.naturalHeight));
+        var c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(im.naturalWidth * k));
+        c.height = Math.max(1, Math.round(im.naturalHeight * k));
+        var x = c.getContext('2d');
+        x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+        x.drawImage(im, 0, 0, c.width, c.height);
+        done(fromCanvas(c));
+      };
+      im.onerror = function () { setStatus('That file could not be opened as an image. Try a JPG or PNG.'); };
+      im.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+  function grayCopy(src) {
+    var c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+    var x = c.getContext('2d'), d = src.getContext('2d').getImageData(0, 0, src.width, src.height);
+    var p = d.data;
+    for (var i = 0; i < p.length; i += 4) {
+      var l = 0.2126 * p[i] + 0.7152 * p[i + 1] + 0.0722 * p[i + 2];
+      p[i] = p[i + 1] = p[i + 2] = l;
+    }
+    x.putImageData(d, 0, 0);
+    return c;
+  }
+  // Drawing marks become see-through blue; the paper (even with shadows) becomes transparent.
+  function tintCopy(src) {
+    var w = src.width, h = src.height, c = document.createElement('canvas'); c.width = w; c.height = h;
+    var d = src.getContext('2d').getImageData(0, 0, w, h), p = d.data, n = w * h, i, x, y;
+    var lum = new Float32Array(n);
+    for (i = 0; i < n; i++) { lum[i] = (0.2126 * p[i * 4] + 0.7152 * p[i * 4 + 1] + 0.0722 * p[i * 4 + 2]) / 255; }
+    var bs = 32, gw = Math.ceil(w / bs), gh = Math.ceil(h / bs), g = new Float32Array(gw * gh), g2 = new Float32Array(gw * gh);
+    for (y = 0; y < h; y++) { for (x = 0; x < w; x++) { var k = ((y / bs) | 0) * gw + ((x / bs) | 0); if (lum[y * w + x] > g[k]) { g[k] = lum[y * w + x]; } } }
+    for (y = 0; y < gh; y++) {
+      for (x = 0; x < gw; x++) {
+        var m = 0;
+        for (var yy = Math.max(0, y - 1); yy <= Math.min(gh - 1, y + 1); yy++) {
+          for (var xx = Math.max(0, x - 1); xx <= Math.min(gw - 1, x + 1); xx++) { if (g[yy * gw + xx] > m) { m = g[yy * gw + xx]; } }
+        }
+        g2[y * gw + x] = m;
+      }
+    }
+    for (y = 0; y < h; y++) {
+      for (x = 0; x < w; x++) {
+        i = y * w + x;
+        var bg = g2[((y / bs) | 0) * gw + ((x / bs) | 0)];
+        var a = Math.max(0, Math.min(1, (bg - lum[i] - 0.05) / 0.35));
+        p[i * 4] = OVERLAY_BLUE[0]; p[i * 4 + 1] = OVERLAY_BLUE[1]; p[i * 4 + 2] = OVERLAY_BLUE[2];
+        p[i * 4 + 3] = Math.round(a * 255);
+      }
+    }
+    c.getContext('2d').putImageData(d, 0, 0);
+    return c;
+  }
+  function grayToCanvas(img) {
+    var c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    var x = c.getContext('2d'), d = x.createImageData(img.width, img.height), p = d.data;
+    for (var i = 0; i < img.data.length; i++) {
+      var v = Math.max(0, Math.min(255, Math.round(img.data[i] * 255)));
+      p[i * 4] = p[i * 4 + 1] = p[i * 4 + 2] = v; p[i * 4 + 3] = 255;
+    }
+    x.putImageData(d, 0, 0);
+    return c;
+  }
+  function imageData(img) { return img.canvas.getContext('2d').getImageData(0, 0, img.w, img.h); }
+
+  function drawThumb(id, img) {
+    var t = $(id), k = 200 / Math.max(img.w, img.h);
+    t.width = Math.round(img.w * k); t.height = Math.round(img.h * k);
+    t.getContext('2d').drawImage(img.canvas, 0, 0, t.width, t.height);
+    t.parentNode.classList.add('filled');
+  }
+  function setImage(which, img) {
+    if (which === 'A') { A = img; drawThumb('thumbA', img); } else { B = img; drawThumb('thumbB', img); }
+    prep = null; auto = null; base = null; lastRes = null; analysis = null; resetAdj();
+    showResult(); render();
+  }
+
+  /* ----------------------------------------------------- sample pairs */
+
+  function rng(seed) { var s = seed >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+  function blank(w, h, v) { var g = new Float32Array(w * h); g.fill(v); return { width: w, height: h, data: g }; }
+  function strokePoly(img, pts, r, ink) {
+    var w = img.width, h = img.height, g = img.data;
+    for (var k = 0; k < pts.length - 1; k++) {
+      var x0 = pts[k][0], y0 = pts[k][1], x1 = pts[k + 1][0], y1 = pts[k + 1][1];
+      var minx = Math.max(0, Math.floor(Math.min(x0, x1) - r - 2)), maxx = Math.min(w - 1, Math.ceil(Math.max(x0, x1) + r + 2));
+      var miny = Math.max(0, Math.floor(Math.min(y0, y1) - r - 2)), maxy = Math.min(h - 1, Math.ceil(Math.max(y0, y1) + r + 2));
+      var dx = x1 - x0, dy = y1 - y0, L2 = dx * dx + dy * dy || 1;
+      for (var y = miny; y <= maxy; y++) {
+        for (var x = minx; x <= maxx; x++) {
+          var t = ((x - x0) * dx + (y - y0) * dy) / L2; t = Math.max(0, Math.min(1, t));
+          var d = Math.hypot(x - (x0 + t * dx), y - (y0 + t * dy));
+          var a = Math.max(0, Math.min(1, r + 0.5 - d)), v = 1 - a * ink;
+          if (v < g[y * w + x]) { g[y * w + x] = v; }
+        }
+      }
+    }
+  }
+  function fillPoly(img, pts, shade) {
+    var w = img.width, h = img.height, g = img.data, ys = pts.map(function (p) { return p[1]; });
+    var y0 = Math.max(0, Math.floor(Math.min.apply(null, ys))), y1 = Math.min(h - 1, Math.ceil(Math.max.apply(null, ys)));
+    for (var y = y0; y <= y1; y++) {
+      var xs = [];
+      for (var k = 0; k < pts.length; k++) {
+        var a = pts[k], b = pts[(k + 1) % pts.length];
+        if ((a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y)) { xs.push(a[0] + (y - a[1]) / (b[1] - a[1]) * (b[0] - a[0])); }
+      }
+      xs.sort(function (p, q) { return p - q; });
+      for (var j = 0; j + 1 < xs.length; j += 2) {
+        for (var x = Math.max(0, Math.ceil(xs[j])); x <= Math.min(w - 1, Math.floor(xs[j + 1])); x++) { g[y * w + x] = shade(x, y); }
+      }
+    }
+  }
+  function ellipse(cx, cy, rx, ry) {
+    var out = [];
+    for (var i = 0; i <= 72; i++) { out.push([cx + rx * Math.cos(i / 72 * 2 * Math.PI), cy + ry * Math.sin(i / 72 * 2 * Math.PI)]); }
+    return out;
+  }
+  function shapes(err) {
+    var vase = [[330, 300], [370, 300], [365, 360], [420 + err.vaseW, 470], [430 + err.vaseW, 560], [400, 640], [300, 640],
+      [270 - err.vaseW, 560], [280 - err.vaseW, 470], [335, 360]];
+    vase.push(vase[0]);
+    return {
+      apple: ellipse(190 + err.appleDx, 560, 75, 68), vase: vase,
+      box: [[440, 520], [560, 520], [560, 650], [440, 650], [440, 520]],
+      lid: [[440, 520], [470, 490], [585, 490], [560, 520]],
+      side: [[560, 520], [585, 490], [585, 620], [560, 650]]
+    };
+  }
+  function makeReference(rand) {
+    var W = 640, H = 800, img = blank(W, H, 0.6), x, y;
+    for (y = 0; y < H; y++) { for (x = 0; x < W; x++) { img.data[y * W + x] = (y < 660 ? 0.55 + 0.15 * x / W : 0.35) + (rand() - 0.5) * 0.06; } }
+    var s = shapes({ appleDx: 0, vaseW: 0 });
+    fillPoly(img, s.vase, function (x) { return 0.25 + 0.4 * (x - 270) / 160; });
+    fillPoly(img, s.apple, function (x, y) { return 0.75 - 0.5 * Math.hypot(x - 170, y - 540) / 90; });
+    fillPoly(img, s.box, function (x) { return 0.85 - 0.1 * (x - 440) / 120; });
+    fillPoly(img, s.lid, function () { return 0.93; });
+    fillPoly(img, s.side, function () { return 0.5; });
+    strokePoly(img, [[40, 40], [220, 40], [220, 230], [40, 230], [40, 40]], 3, 0.6);
+    strokePoly(img, [[130, 40], [130, 230]], 2, 0.5);
+    return img;
+  }
+  function makeDrawing(rand, truth, err, noise) {
+    var W = 1000, H = 1300, img = blank(W, H, 1), x, y, n, k;
+    for (y = 0; y < H; y++) { for (x = 0; x < W; x++) { img.data[y * W + x] = 0.97 - 0.18 * (x / W) * (y / H) + (rand() - 0.5) * 0.07; } }
+    var c = Math.cos(truth.theta), s = Math.sin(truth.theta);
+    var toB = function (p) { var u = (p[0] - truth.tx) / truth.scale, v = (p[1] - truth.ty) / truth.scale; return [c * u + s * v, -s * u + c * v]; };
+    var sh = shapes(err);
+    ['apple', 'vase', 'box', 'lid', 'side'].forEach(function (key) {
+      var pts = sh[key].map(toB).map(function (p) { return [p[0] + (rand() - 0.5) * 1.5, p[1] + (rand() - 0.5) * 1.5]; });
+      strokePoly(img, pts, 1.6, 0.8);
+    });
+    if (noise) {
+      for (n = 0; n < 6; n++) {
+        var px = 80 + rand() * 250, py = 80 + rand() * 1100, pts = [[px, py]];
+        for (k = 0; k < 25; k++) { px += (rand() - 0.3) * 18; py += (rand() - 0.5) * 18; pts.push([px, py]); }
+        strokePoly(img, pts, 1.2, 0.7);
+      }
+      for (var line = 0; line < 3; line++) {
+        var z = [];
+        for (k = 0; k < 40; k++) { z.push([620 + k * 8, 1150 + line * 30 + (k % 2 ? -8 : 8)]); }
+        strokePoly(img, z, 1.1, 0.8);
+      }
+      for (y = 300; y < 420; y++) {
+        for (x = 700; x < 860; x++) {
+          var dd = Math.hypot((x - 780) / 80, (y - 360) / 60);
+          if (dd < 1) { img.data[y * W + x] -= 0.25 * (1 - dd); }
+        }
+      }
+      strokePoly(img, [[100, 950], [900, 700]], 1.0, 0.5);
+      for (n = 0; n < 400; n++) { var sx = rand() * W | 0, sy = rand() * H | 0; strokePoly(img, [[sx, sy], [sx + 1, sy]], 0.8, 0.6); }
+    }
+    return img;
+  }
+  var SAMPLES = {
+    prop: { truth: [0.62, 6, 20, 30], err: { appleDx: 28, vaseW: 18 }, noise: true },
+    clean: { truth: [0.62, 6, 20, 30], err: { appleDx: 0, vaseW: 0 }, noise: false },
+    noisy: { truth: [0.62, 6, 20, 30], err: { appleDx: 0, vaseW: 0 }, noise: true },
+    rot22: { truth: [0.8, -22, 60, 260], err: { appleDx: 0, vaseW: 0 }, noise: true },
+    rot170: { truth: [0.7, 170, 700, 900], err: { appleDx: 0, vaseW: 0 }, noise: true, rotation: 180 }
+  };
+  function loadSample(key, then) {
+    var sp = SAMPLES[key], rand = rng(42);
+    var t = { scale: sp.truth[0], theta: sp.truth[1] * Math.PI / 180, tx: sp.truth[2], ty: sp.truth[3] };
+    var ref = makeReference(rand), drw = makeDrawing(rand, t, sp.err, sp.noise);
+    $('rotRange').value = String(sp.rotation || 30);
+    setImage('A', fromCanvas(grayToCanvas(ref)));
+    setImage('B', fromCanvas(grayToCanvas(drw)));
+    if (then) { then(); }
+  }
+
+  /* ---------------------------------------------------------- matching */
+
+  function setStatus(msg) { $('status').textContent = msg || ''; }
+  function busy(on) {
+    ['matchBtn', 'snapBtn', 'resetBtn', 'loadSample'].forEach(function (id) { $(id).disabled = on; });
+    document.body.classList.toggle('busy', on);
+  }
+  function runMatch() {
+    if (!A || !B) { setStatus('Add both a reference and a drawing first.'); return; }
+    var range = +$('rotRange').value;
+    setStatus(range >= 180 ? 'Matching at any angle. This can take 10 seconds or more.' : 'Matching…');
+    busy(true);
+    setTimeout(function () {
+      try {
+        var r = ImageMatch.match(imageData(A), imageData(B), {
+          rotationRange: range, reverseWeight: $('unfinished').checked ? 0.15 : 0.5
+        });
+        prep = r.prepared; lastRes = r;
+        if (r.error) {
+          auto = base = null; analysis = null;
+          setStatus(r.error + '. Try a sharper, better-lit photo or crop closer to the drawing.');
+        } else {
+          auto = pick(r); base = pick(r); resetAdj(); analysis = r.analysis;
+          setStatus('Matched in ' + (r.timeMs / 1000).toFixed(1) + ' s.');
+        }
+      } catch (e) {
+        setStatus('Matching stopped with an error: ' + e.message);
+      }
+      busy(false); showResult(); render();
+    }, 40);
+  }
+  function pick(r) { return { scale: r.scale, theta: r.theta, tx: r.tx, ty: r.ty }; }
+  function pivot() {
+    if (prep) { var b = prep.boxB; return [0.5 * (b.x0 + b.x1), 0.5 * (b.y0 + b.y1)]; }
+    return B ? [B.w / 2, B.h / 2] : [0, 0];
+  }
+  // Manual adjustments rotate and scale around the drawing's centre, then move.
+  function current() {
+    if (!base) { return null; }
+    var pv = pivot(), pa = ImageMatch.apply(base, pv[0], pv[1]);
+    var d = adj.rot * Math.PI / 180, f = adj.scl, c = Math.cos(d), s = Math.sin(d);
+    var ux = base.tx - pa[0], uy = base.ty - pa[1];
+    return { scale: base.scale * f, theta: base.theta + d,
+      tx: f * (c * ux - s * uy) + pa[0] + adj.px, ty: f * (s * ux + c * uy) + pa[1] + adj.py };
+  }
+  function resetAdj() {
+    adj = { rot: 0, scl: 1, px: 0, py: 0 };
+    $('rot').value = 0; $('scl').value = 100;
+    $('rotOut').textContent = '0.0°'; $('sclOut').textContent = '100.0%';
+  }
+  function scheduleAnalyze() {
+    clearTimeout(analyzeTimer);
+    analyzeTimer = setTimeout(function () {
+      var P = current();
+      if (!prep || !P) { return; }
+      analysis = ImageMatch.analyze(prep, P);
+      showResult(); render();
+    }, 160);
+  }
+  function snap() {
+    var P = current();
+    if (!prep || !P) { setStatus('Run Match first, then nudge and snap.'); return; }
+    setStatus('Snapping…'); busy(true);
+    setTimeout(function () {
+      var r = ImageMatch.refine(prep, P);
+      base = pick(r); resetAdj();
+      analysis = ImageMatch.analyze(prep, base);
+      setStatus('Snapped to the nearest fit.');
+      busy(false); showResult(); render();
+    }, 30);
+  }
+  function resetToMatch() {
+    if (!auto) { return; }
+    base = { scale: auto.scale, theta: auto.theta, tx: auto.tx, ty: auto.ty }; resetAdj();
+    analysis = lastRes ? lastRes.analysis : null;
+    setStatus('Back to the automatic match.');
+    showResult(); render();
+  }
+
+  /* ----------------------------------------------------------- readout */
+
+  function showResult() {
+    var P = current(), an = analysis;
+    $('rScore').textContent = an && an.proportionScore !== null ? an.proportionScore + ' / 100' : '—';
+    $('rRms').textContent = an && an.proportionScore !== null ? an.rmsErrorPct.toFixed(1) + '% of figure size' : '—';
+    $('rQual').textContent = an ? Math.round(an.matchQuality * 100) + '%' : '—';
+    $('rScale').textContent = P ? '×' + P.scale.toFixed(3) : '—';
+    $('rRot').textContent = P ? (P.theta * 180 / Math.PI).toFixed(1) + '°' : '—';
+    $('rOff').textContent = P ? Math.round(P.tx) + ', ' + Math.round(P.ty) + ' px' : '—';
+    $('rTime').textContent = lastRes && !lastRes.error ? (lastRes.timeMs / 1000).toFixed(1) + ' s' : '—';
+    var notes = [];
+    if (lastRes && !lastRes.error && lastRes.ambiguity > 0.92) {
+      notes.push('Another placement fits almost as well. Check the overlay and nudge if it looks wrong.');
+    }
+    if (an && an.matchQuality < 0.3) {
+      notes.push('Few edges line up, so this match may be wrong. Try a wider rotation search, or drag it close and press Snap to fit.');
+    }
+    if (an && an.proportionScore === null) {
+      notes.push('No region could be measured reliably, so there is no proportion score for this placement.');
+    }
+    $('note').textContent = notes.join(' ');
+  }
+
+  /* ------------------------------------------------------------ render */
+
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function render() {
+    var cv = $('view'), ctx = cv.getContext('2d');
+    $('empty').hidden = !!A;
+    cv.hidden = !A;
+    if (!A) { return; }
+    var ds = Math.min(1, VIEW_MAX / Math.max(A.w, A.h));
+    var W = Math.round(A.w * ds), H = Math.round(A.h * ds);
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    var rect = cv.getBoundingClientRect(), pxr = rect.width > 0 ? cv.width / rect.width : 1;
+    var P = B ? current() : null, m;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+
+    if (viewMode === 'edges') {
+      ctx.fillStyle = css('--canvas'); ctx.fillRect(0, 0, W, H);
+      if (!prep) { ctx.drawImage(A.gray, 0, 0, W, H); ctx.fillStyle = css('--canvas'); ctx.globalAlpha = 0.8; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+      if (prep) {
+        var ea = ImageMatch.edges(prep, "A"), eb = ImageMatch.edges(prep, "B"), dot = Math.max(1, 1.6 * pxr), i;
+        ctx.fillStyle = css('--ink');
+        for (i = 0; i < ea.n; i++) { ctx.globalAlpha = 0.25 + 0.6 * ea.w[i]; ctx.fillRect(ea.x[i] * ds - dot / 2, ea.y[i] * ds - dot / 2, dot, dot); }
+        if (P) {
+          ctx.fillStyle = 'rgb(' + OVERLAY_BLUE.join(',') + ')';
+          for (i = 0; i < eb.n; i++) {
+            var q = ImageMatch.apply(P, eb.x[i], eb.y[i]);
+            ctx.globalAlpha = 0.3 + 0.7 * eb.w[i];
+            ctx.fillRect(q[0] * ds - dot / 2, q[1] * ds - dot / 2, dot, dot);
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+    } else if (viewMode === 'difference') {
+      ctx.drawImage(A.gray, 0, 0, W, H);
+      if (P) {
+        m = matrix(P);
+        ctx.setTransform(ds * m[0], ds * m[1], ds * m[2], ds * m[3], ds * m[4], ds * m[5]);
+        ctx.globalCompositeOperation = 'difference'; ctx.globalAlpha = opacity;
+        ctx.drawImage(B.gray, 0, 0);
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+      }
+    } else {
+      ctx.drawImage(A.canvas, 0, 0, W, H);
+      if (P) {
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.3; ctx.fillRect(0, 0, W, H);
+        m = matrix(P);
+        ctx.setTransform(ds * m[0], ds * m[1], ds * m[2], ds * m[3], ds * m[4], ds * m[5]);
+        ctx.globalAlpha = opacity;
+        ctx.drawImage(B.tint, 0, 0);
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+      }
+    }
+
+    if (showArrows && analysis && P) {
+      var red = css('--red'), lw = 2.5 * pxr;
+      analysis.cells.forEach(function (c) {
+        if (!c.reliable || c.errorPct < 0.6) { return; }
+        arrow(ctx, c.x * ds, c.y * ds, (c.x + c.dx) * ds, (c.y + c.dy) * ds, lw, red);
+      });
+    }
+  }
+  function matrix(P) {
+    var c = Math.cos(P.theta), s = Math.sin(P.theta);
+    return [P.scale * c, P.scale * s, -P.scale * s, P.scale * c, P.tx, P.ty];
+  }
+  function arrow(ctx, x0, y0, x1, y1, lw, color) {
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(255,255,255,0.9)'; ctx.shadowBlur = lw * 1.5;
+    ctx.beginPath(); ctx.arc(x0, y0, lw * 1.4, 0, 2 * Math.PI); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    var a = Math.atan2(y1 - y0, x1 - x0), hl = lw * 4;
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - hl * Math.cos(a - 0.45), y1 - hl * Math.sin(a - 0.45));
+    ctx.lineTo(x1 - hl * Math.cos(a + 0.45), y1 - hl * Math.sin(a + 0.45));
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  /* ------------------------------------------------------------ events */
+
+  $('fileA').addEventListener('change', function (e) { if (e.target.files[0]) { loadFile(e.target.files[0], function (im) { setImage('A', im); setStatus('Reference added.'); }); } e.target.value = ''; });
+  $('fileB').addEventListener('change', function (e) { if (e.target.files[0]) { loadFile(e.target.files[0], function (im) { setImage('B', im); setStatus('Drawing added.'); }); } e.target.value = ''; });
+  $('loadSample').addEventListener('click', function () {
+    setStatus('Building the sample pair…'); busy(true);
+    setTimeout(function () { busy(false); loadSample($('sample').value, runMatch); }, 30);
+  });
+  $('matchBtn').addEventListener('click', runMatch);
+  $('snapBtn').addEventListener('click', snap);
+  $('resetBtn').addEventListener('click', resetToMatch);
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="view"]'), function (r) {
+    r.addEventListener('change', function () { viewMode = r.value; render(); });
+  });
+  $('opacity').addEventListener('input', function (e) { opacity = e.target.value / 100; render(); });
+  $('arrows').addEventListener('change', function (e) { showArrows = e.target.checked; render(); });
+  $('rot').addEventListener('input', function (e) {
+    adj.rot = +e.target.value; $('rotOut').textContent = adj.rot.toFixed(1) + '°';
+    showResult(); render(); scheduleAnalyze();
+  });
+  $('scl').addEventListener('input', function (e) {
+    adj.scl = e.target.value / 100; $('sclOut').textContent = (+e.target.value).toFixed(1) + '%';
+    showResult(); render(); scheduleAnalyze();
+  });
+  var cv = $('view');
+  cv.addEventListener('pointerdown', function (e) {
+    if (!base) { return; }
+    drag = { x: e.clientX, y: e.clientY };
+    cv.setPointerCapture(e.pointerId); cv.classList.add('dragging');
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!drag || !A) { return; }
+    var rect = cv.getBoundingClientRect(), k = A.w / rect.width;
+    adj.px += (e.clientX - drag.x) * k; adj.py += (e.clientY - drag.y) * k;
+    drag = { x: e.clientX, y: e.clientY };
+    showResult(); render();
+  });
+  function endDrag() { if (drag) { drag = null; cv.classList.remove('dragging'); scheduleAnalyze(); } }
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', endDrag);
+  window.addEventListener('resize', render);
+
+  // Start with the harder sample already matched.
+  setStatus('Building the sample pair…'); busy(true);
+  setTimeout(function () { busy(false); loadSample('prop', runMatch); }, 60);
+}());
+</script>
 </body>
 </html>
