@@ -20,6 +20,11 @@
 		"name": "James Thomas",
 		"url": "https://jtxt.org/",
 		"jobTitle": "Creative Technologist",
+		"worksFor": {
+			"@type": "Organization",
+			"name": "James Thomas Consulting LLC",
+			"url": "https://jtxt.org/"
+		},
 		"address": {
 			"@type": "PostalAddress",
 			"addressLocality": "Salt Lake City",
@@ -143,6 +148,14 @@
 
 		a { color: var(--accent); }
 
+		.legal {
+			grid-column: 1 / -1;
+			padding-top: 1.5rem;
+			border-top: 1px solid var(--rule);
+			font-size: 0.8rem;
+			color: var(--text-dim);
+		}
+
 		/* mobile: stack, identity block first */
 		@media (max-width: 620px) {
 			.page {
@@ -211,6 +224,8 @@
 				</p>
 			</div>
 		</div>
+
+		<footer class="legal">jtxt.org is operated by James Thomas Consulting LLC</footer>
 
 	</div>
 </body>
