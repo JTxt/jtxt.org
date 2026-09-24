@@ -145,6 +145,29 @@
 			font-size: 0.95rem;
 		}
 
+		/* screenshot sits small, to the right of the text */
+		.project {
+			display: grid;
+			grid-template-columns: 1fr 200px;
+			column-gap: 1.5rem;
+			align-items: start;
+		}
+		.project > * { grid-column: 1; }
+		.project > .work-title { justify-self: start; }
+		.project > .shot {
+			grid-column: 2;
+			grid-row: 1 / span 2;
+			margin-top: 0.3rem;
+		}
+		.shot { display: block; max-width: 200px; }
+		.shot img {
+			display: block;
+			width: 100%;
+			height: auto;
+			border: 1px solid var(--rule);
+			border-radius: 4px;
+		}
+
 		a { color: var(--accent); }
 
 		.legal {
@@ -166,6 +189,8 @@
 				border-bottom: 1px solid var(--rule);
 			}
 			.identity h1 { font-size: 1.4rem; }
+			.project { display: block; }
+			.shot { margin-top: 0.75rem; max-width: 440px; }
 		}
 
 		@media (prefers-reduced-motion: reduce) {
@@ -212,8 +237,14 @@
 
 			<div class="section work">
 				<div class="section-label">things i've made</div>
-				<a class="work-title" href="/tools/squint/">squint</a>
-				<p>see your reference the way painters squint at it. a free tool that blurs and posterizes photos into simple value shapes, so you can nail proportions before the details. works on your phone or computer, and nothing gets uploaded.</p>
+				<div class="project">
+					<a class="work-title" href="/tools/squint/">squint</a>
+					<a class="shot" href="/tools/squint/">
+						<img src="/work/squint/hero.webp" width="600" height="394" loading="lazy"
+							alt="Squint showing a portrait under a straw hat broken into seven value bands, beside its controls: value count, band boundaries, and the squint slider">
+					</a>
+					<p>see your reference the way painters squint at it. a free tool that blurs and posterizes photos into simple value shapes, so you can nail proportions before the details. works on your phone or computer, and nothing gets uploaded.</p>
+				</div>
 				<p><a href="/work/">more things i've made →</a></p>
 			</div>
 

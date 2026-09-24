@@ -118,6 +118,9 @@
   .btn.quiet{ background:var(--chip); color:var(--ink); }
   .btn:active{ transform:scale(.97); }
   .small{ font-size:13px; color:var(--muted); margin:0; }
+  .welcome p.home{ margin-top:14px; }
+  .welcome a, .brand a{ color:var(--muted); }
+  .welcome a:hover, .brand a:hover{ color:var(--accent); }
 
   #drop{
     position:absolute; inset:10px; border:2px dashed var(--accent); border-radius:12px;
@@ -285,6 +288,7 @@
           <button class="btn quiet" id="exampleBtn" type="button">Try a sample image</button>
         </div>
         <p class="small">You can also drop or paste an image. Photos never leave this device.</p>
+        <p class="small home">Made by <a href="/">James Thomas</a> · <a href="/work/">more tools</a></p>
       </div>
     </div>
 
@@ -294,7 +298,7 @@
   </main>
 
   <aside id="panel">
-    <div class="brand"><span class="wm">Squint</span><small>A value study tool</small></div>
+    <div class="brand"><span class="wm">Squint</span><small>A value study tool · <a href="/">jtxt.org</a></small></div>
 
     <div class="row">
       <span class="lbl" id="valuesLbl">Values</span>
