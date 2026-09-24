@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flicker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+<style>
+  :root{
+    --graphite:#14171a;
+    --slate:#1c2024;
+    --slate-2:#22262b;
+    --hairline:#2e3338;
+    --fog:#8a9199;
+    --paper:#eceef0;
+    --amber:#ffb020;
+    --cyan:#59d6de;
+    --font: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --tap:44px;
+    --bar:34px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{
+    height:100%;
+    margin:0;
+    background:var(--graphite);
+    color:var(--paper);
+    font-family:var(--font);
+    overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+    -webkit-user-select:none;
+  }
+
+  #app{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    height:100dvh;
+    width:100vw;
+    padding-top:env(safe-area-inset-top);
+  }
+
+  :focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+
+  /* ---------- Stage ---------- */
+  #stage{
+    position:relative;
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+    touch-action:none;
+  }
+  #gl{ display:block; width:100%; height:100%; }
+
+  #readouts{
+    position:absolute; left:12px; bottom:10px;
+    display:flex; flex-direction:column; gap:2px;
+    pointer-events:none; max-width:62%;
+  }
+  #readouts .ro{
+    font-size:9px; letter-spacing:0.05em; opacity:0; transition:opacity .3s ease;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  #readouts .ro.show{ opacity:.85; }
+  #readouts .ro.a{ color:var(--amber); }
+  #readouts .ro.b{ color:var(--cyan); }
+
+  #zoomTag{
+    position:absolute; right:12px; bottom:10px;
+    font-size:9px; letter-spacing:0.08em; color:var(--fog);
+    opacity:0; transition:opacity .3s ease; pointer-events:none;
+  }
+  #zoomTag.show{ opacity:.9; }
+
+  #peekTag{
+    position:absolute; top:12px; left:50%; transform:translateX(-50%);
+    font-size:10px; letter-spacing:0.16em; color:var(--graphite);
+    padding:4px 10px; border-radius:3px;
+    opacity:0; transition:opacity .12s ease; pointer-events:none;
+  }
+  #peekTag.show{ opacity:1; }
+  #peekTag.a{ background:var(--amber); }
+  #peekTag.b{ background:var(--cyan); }
+
+  #layerChip{
+    position:absolute; top:12px; left:12px; z-index:3;
+    display:flex; align-items:center; gap:6px;
+    background:var(--slate-2); border:1px solid var(--hairline);
+    border-radius:20px; padding:5px 12px 5px 6px;
+    font-size:10px; letter-spacing:0.08em; color:var(--fog);
+    cursor:pointer; min-height:30px;
+  }
+  #layerChip .dot{
+    width:18px; height:18px; border-radius:50%;
+    display:grid; place-items:center;
+    font-size:10px; font-weight:700; color:var(--graphite);
+  }
+  #layerChip.a .dot{ background:var(--amber); }
+  #layerChip.b .dot{ background:var(--cyan); }
+  #layerChip.a{ color:var(--amber); }
+  #layerChip.b{ color:var(--cyan); }
+  #layerChip.hidden{ display:none; }
+
+  /* ---------- Empty state ---------- */
+  #emptyState{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:16px; text-align:center; padding:24px;
+    overflow-y:auto;
+  }
+  #emptyState.hidden{ display:none; }
+  .wordmark{
+    font-size:clamp(30px,10vw,54px); font-weight:700;
+    letter-spacing:0.2em; color:var(--paper); line-height:1;
+    text-indent:0.2em;
+  }
+  .wordmark .cursor{
+    display:inline-block; width:0.42em; background:var(--amber);
+    color:transparent; animation:blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink{ 50%{opacity:0;} }
+  .blurb{
+    font-size:12px; color:var(--fog); max-width:46ch;
+    line-height:1.85; margin:0;
+  }
+  .blurb b{ color:var(--paper); font-weight:500; }
+  .blurb + .blurb{ margin-top:-4px; }
+
+  #slots{
+    display:flex; gap:10px; margin-top:4px; flex-wrap:wrap; justify-content:center;
+  }
+  .slot{
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    font-family:var(--font); background:var(--slate);
+    border:1.5px dashed var(--hairline); border-radius:8px;
+    padding:16px 20px; min-width:132px; cursor:pointer;
+  }
+  .slot .sdot{
+    width:22px; height:22px; border-radius:50%;
+    display:grid; place-items:center; font-size:11px; font-weight:700; color:var(--graphite);
+  }
+  .slot.a .sdot{ background:var(--amber); }
+  .slot.b .sdot{ background:var(--cyan); }
+  .slot .slabel{ font-size:11px; color:var(--paper); letter-spacing:0.04em; }
+  .slot .ssub{ font-size:9px; color:var(--fog); }
+  .slot:active{ transform:scale(0.97); }
+  .slot.filled{ border-style:solid; border-color:var(--hairline); }
+
+  .keyline{ font-size:10px; color:#5f666d; letter-spacing:0.04em; }
+
+  #dropOverlay{
+    position:absolute; inset:8px;
+    border:2px dashed var(--amber); border-radius:6px;
+    background:rgba(255,176,32,0.06);
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; letter-spacing:0.14em; color:var(--amber);
+    opacity:0; pointer-events:none; transition:opacity .15s ease; z-index:8;
+  }
+  #dropOverlay.active{ opacity:1; }
+
+  /* ---------- Flicker overlay ---------- */
+  #flickerPanel{
+    position:absolute; inset:0; z-index:6;
+    background:var(--graphite);
+    display:none; flex-direction:column;
+  }
+  #flickerPanel.open{ display:flex; }
+  #flickerHead{
+    flex-shrink:0; display:flex; align-items:baseline; gap:10px;
+    padding:10px 14px 4px;
+  }
+  #flickerHead h2{
+    margin:0; font-size:11px; font-weight:600; letter-spacing:0.16em; color:var(--paper);
+  }
+  #flickerHead span{ font-size:10px; color:var(--fog); }
+
+  #flickerBody{
+    flex:1; min-height:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:16px; padding:10px 16px 18px;
+    overflow-y:auto;
+  }
+  #previewBox{
+    position:relative; max-width:100%; max-height:56vh;
+    border-radius:6px; overflow:hidden; border:1px solid var(--hairline);
+    background:var(--slate);
+  }
+  #previewBox canvas{ display:block; max-width:100%; max-height:56vh; width:auto; height:auto; }
+  #previewB{ position:absolute; inset:0; opacity:0; transition:opacity .05s linear; }
+  #previewTag{
+    position:absolute; bottom:6px; left:50%; transform:translateX(-50%);
+    font-size:9px; letter-spacing:0.14em; padding:3px 9px; border-radius:3px;
+    color:var(--graphite); pointer-events:none;
+  }
+  #previewTag.a{ background:var(--amber); }
+  #previewTag.b{ background:var(--cyan); }
+
+  #flickerActions{
+    display:flex; flex-direction:column; align-items:center; gap:10px; width:100%; max-width:340px;
+  }
+  #genBtn, #dlBtn{
+    font-family:var(--font); border:none; border-radius:4px;
+    padding:12px 22px; min-height:var(--tap); width:100%;
+    font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;
+  }
+  #genBtn{ background:var(--amber); color:#1a1204; }
+  #genBtn:active{ transform:scale(0.97); }
+  #genBtn:disabled{ opacity:.4; }
+  #dlBtn{ background:var(--slate-2); color:var(--cyan); border:1px solid var(--hairline); display:none; text-align:center; text-decoration:none; }
+  #dlBtn.show{ display:block; }
+  #genStatus{ font-size:10px; color:var(--fog); letter-spacing:0.04em; min-height:14px; }
+
+  /* ---------- Dock ---------- */
+  #dock{
+    flex-shrink:0;
+    background:var(--slate);
+    border-top:1px solid var(--hairline);
+    padding-bottom:env(safe-area-inset-bottom);
+    display:grid;
+    grid-template-rows:1fr;
+    transition:grid-template-rows .32s cubic-bezier(0.4,0,0.2,1);
+  }
+  #app.chrome-hidden #dock{ grid-template-rows:0fr; border-top-color:transparent; }
+  #dockInner{ overflow:hidden; min-height:0; }
+
+  #bar{
+    position:relative; height:var(--bar);
+    border-bottom:1px solid var(--hairline);
+    overflow:hidden; touch-action:none; cursor:ew-resize;
+  }
+  #bar.static{ cursor:default; }
+  #ruler{
+    position:absolute; inset:0;
+    background-repeat:repeat-x;
+    background-image:
+      linear-gradient(90deg, var(--fog) 1px, transparent 1px),
+      linear-gradient(90deg, var(--hairline) 1px, transparent 1px);
+    background-size:50px 100%, 10px 100%;
+    opacity:0; transition:opacity .18s ease;
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent);
+    mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent);
+  }
+  #needle{
+    position:absolute; left:50%; top:6px; bottom:6px; width:2px;
+    margin-left:-1px; background:var(--amber); border-radius:1px;
+    opacity:0; transition:opacity .18s ease;
+  }
+  #bar.live #ruler{ opacity:.7; }
+  #bar.live #needle{ opacity:1; }
+  #barLabel, #barValue{
+    position:absolute; top:50%; transform:translateY(-50%);
+    pointer-events:none; white-space:nowrap;
+  }
+  #barLabel{ left:12px; font-size:9px; letter-spacing:0.14em; color:var(--fog); }
+  #barValue{ right:12px; font-size:11.5px; font-weight:600; letter-spacing:0.04em; color:var(--amber); }
+  #barValue.off{ color:#5f666d; font-weight:400; }
+
+  #toolsWrap{ position:relative; }
+  #tools{
+    overflow-x:auto; overflow-y:hidden; scrollbar-width:none;
+    -webkit-overflow-scrolling:touch; scroll-behavior:smooth;
+  }
+  #toolsInner{
+    display:flex; gap:1px; margin:0 auto; width:max-content;
+    padding:3px 14px 5px;
+  }
+  .tool{
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    background:none; border:none; padding:1px 2px; cursor:pointer;
+    color:var(--fog); font-family:var(--font); min-width:50px;
+  }
+  .tool .ring{
+    position:relative; width:var(--tap); height:var(--tap);
+    display:grid; place-items:center;
+    border-radius:50%;
+    transition:background .15s ease, transform .08s ease;
+  }
+  .tool .ring svg.arc{
+    position:absolute; inset:0; width:100%; height:100%;
+    transform:rotate(-90deg); pointer-events:none;
+  }
+  .arc .bg{ fill:none; stroke:var(--hairline); stroke-width:2; }
+  .arc .fg{
+    fill:none; stroke:var(--amber); stroke-width:2; stroke-linecap:round;
+    transition:stroke-dashoffset .18s ease, opacity .18s ease;
+  }
+  .tool .glyph{ display:grid; place-items:center; }
+  .tool .glyph svg{ width:21px; height:21px; }
+  .tool .glyph.letter{ font-size:16px; font-weight:700; }
+  .tool-name{ font-size:8.5px; letter-spacing:0.04em; }
+
+  .tool.is-on{ color:var(--paper); }
+  .tool.is-on .ring{ background:rgba(255,176,32,.10); }
+  .tool.is-on .glyph{ color:var(--amber); }
+  .tool.is-selected{ color:var(--paper); }
+  .tool.is-selected .ring{ box-shadow:inset 0 0 0 1px rgba(236,238,240,.22); }
+  .tool:disabled{ opacity:.25; cursor:default; }
+  .tool:active:not(:disabled) .ring{ transform:scale(0.92); }
+
+  #dock.flicker-open .tool:not([data-tool="flicker"]){ display:none; }
+
+  .edge{
+    position:absolute; top:0; bottom:0; width:30px;
+    display:grid; place-items:center;
+    border:none; padding:0; cursor:pointer; color:var(--fog);
+    opacity:0; pointer-events:none; transition:opacity .2s ease;
+  }
+  .edge.show{ opacity:.55; pointer-events:auto; }
+  .edge:hover{ opacity:1; }
+  .edge svg{ width:16px; height:16px; }
+  #edgeL{ left:0;  background:linear-gradient(90deg, var(--slate) 55%, rgba(28,32,36,0)); }
+  #edgeR{ right:0; background:linear-gradient(270deg, var(--slate) 55%, rgba(28,32,36,0)); }
+
+  .fileInput{ display:none; }
+  ::-webkit-scrollbar{ display:none; }
+
+  @media (prefers-reduced-motion: reduce){
+    .wordmark .cursor{ animation:none; opacity:1; }
+    #tools{ scroll-behavior:auto; }
+    *{ transition-duration:.01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="stage">
+    <canvas id="gl"></canvas>
+
+    <div id="layerChip" class="a hidden">
+      <span class="dot">A</span>
+      <span id="layerChipText">active layer</span>
+    </div>
+
+    <div id="readouts">
+      <div class="ro a" id="roA"></div>
+      <div class="ro b" id="roB"></div>
+    </div>
+    <div id="peekTag" class="a">SHOWING A</div>
+    <div id="zoomTag">100%</div>
+
+    <div id="emptyState">
+      <div class="wordmark">FLICKER<span class="cursor">_</span></div>
+      <p class="blurb">A flip-test viewer for artists. Load your piece as <b>A</b> and a reference as <b>B</b>, then pan, zoom and rotate B until it lines up with A.</p>
+      <p class="blurb">Hold anywhere on the image to peek fully at the other layer. Once they're aligned, export a flashing GIF that flips between them &mdash; the fastest way to catch what's off.</p>
+      <div id="slots">
+        <div class="slot a" id="slotA">
+          <span class="sdot">A</span>
+          <span class="slabel">Load image A</span>
+          <span class="ssub">your piece</span>
+        </div>
+        <div class="slot b" id="slotB">
+          <span class="sdot">B</span>
+          <span class="slabel">Load image B</span>
+          <span class="ssub">reference</span>
+        </div>
+      </div>
+      <p class="keyline">or drop images anywhere &middot; or paste with Ctrl / Cmd + V</p>
+    </div>
+
+    <div id="flickerPanel">
+      <div id="flickerHead">
+        <h2>Flicker</h2>
+        <span>Preview the flip, then export a GIF</span>
+      </div>
+      <div id="flickerBody">
+        <div id="previewBox">
+          <canvas id="previewA"></canvas>
+          <canvas id="previewB"></canvas>
+          <span id="previewTag" class="a">A</span>
+        </div>
+        <div id="flickerActions">
+          <button id="genBtn" type="button">Generate GIF</button>
+          <div id="genStatus"></div>
+          <a id="dlBtn" href="#" download="flicker-compare.gif">Download GIF</a>
+        </div>
+      </div>
+    </div>
+
+    <div id="dropOverlay">Drop to load</div>
+  </div>
+
+  <div id="dock">
+    <div id="dockInner">
+
+      <div id="bar" class="static" role="slider" tabindex="0"
+           aria-label="Adjustment" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+        <div id="ruler"></div>
+        <div id="needle"></div>
+        <span id="barLabel">Load two images to begin</span>
+        <span id="barValue"></span>
+      </div>
+
+      <div id="toolsWrap">
+        <div id="tools">
+          <div id="toolsInner">
+
+            <button class="tool" type="button" data-tool="openA" aria-label="Load image A">
+              <span class="ring">
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M3 16.5l4.5-4 4 3.5 3.5-3 6 5.5"/></svg></span>
+              </span>
+              <span class="tool-name">Load A</span>
+            </button>
+
+            <button class="tool" type="button" data-tool="openB" aria-label="Load image B">
+              <span class="ring">
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M3 16.5l4.5-4 4 3.5 3.5-3 6 5.5"/></svg></span>
+              </span>
+              <span class="tool-name">Load B</span>
+            </button>
+
+            <button class="tool" type="button" data-tool="swap" aria-label="Swap A and B">
+              <span class="ring">
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13"/><path d="M14 4.5L17.5 8 14 11.5"/><path d="M20 16H7"/><path d="M10 12.5L6.5 16 10 19.5"/></svg></span>
+              </span>
+              <span class="tool-name">Swap</span>
+            </button>
+
+            <button class="tool" type="button" data-tool="layer" aria-label="Switch active layer">
+              <span class="ring">
+                <span class="glyph letter" id="layerGlyph">A</span>
+              </span>
+              <span class="tool-name">Layer</span>
+            </button>
+
+            <button class="tool" type="button" data-tool="zoom" aria-label="Zoom">
+              <span class="ring">
+                <svg class="arc" viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="19"/><circle class="fg" cx="22" cy="22" r="19"/></svg>
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L20 20"/><path d="M10.5 8v5"/><path d="M8 10.5h5"/></svg></span>
+              </span>
+              <span class="tool-name">Zoom</span>
+            </button>
+
+            <button class="tool" type="button" data-tool="rotate" aria-label="Rotate">
+              <span class="ring">
+                <svg class="arc" viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="19"/><circle class="fg" cx="22" cy="22" r="19"/></svg>
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-3.1-6.6"/><path d="M20.5 3.8v4.2h-4.2"/></svg></span>
+              </span>
+              <span class="tool-name">Rotate</span>
+            </button>
+
+            <button class="tool" type="button" data-tool="opacity" aria-label="Opacity blend">
+              <span class="ring">
+                <svg class="arc" viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="19"/><circle class="fg" cx="22" cy="22" r="19"/></svg>
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z" fill="currentColor" stroke="none"/></svg></span>
+              </span>
+              <span class="tool-name">Opacity</span>
+            </button>
+
+            <button class="tool" type="button" data-tool="reset" aria-label="Reset active layer">
+              <span class="ring">
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"/><path d="M4.6 14a8 8 0 1 0 2-8.5L4 10"/></svg></span>
+              </span>
+              <span class="tool-name">Reset</span>
+            </button>
+
+            <button class="tool" type="button" data-tool="flicker" aria-label="Flicker export" aria-pressed="false">
+              <span class="ring">
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 3L5 13.5h5.2L9.5 21 19 9.5h-5.4z"/></svg></span>
+              </span>
+              <span class="tool-name">Flicker</span>
+            </button>
+
+          </div>
+        </div>
+
+        <button class="edge" id="edgeL" type="button" aria-label="Scroll tools left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <button class="edge" id="edgeR" type="button" aria-label="Scroll tools right">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<input type="file" id="fileInputA" class="fileInput" accept="image/*">
+<input type="file" id="fileInputB" class="fileInput" accept="image/*">
+
+<script>
+(function(){
+  "use strict";
+
+  // =============================================================
+  // Constants
+  // =============================================================
+  var HOLD_MS = 220;
+  var MIN_ZOOM = 0.1, MAX_ZOOM = 16;
+  var MAX_TEX = (window.innerWidth < 700 || window.innerHeight < 700) ? 1536 : 2048;
+  var MIX_EASE = 16;
+  var BG = [0.078, 0.090, 0.102];
+
+  // =============================================================
+  // DOM
+  // =============================================================
+  function $(id){ return document.getElementById(id); }
+  var app = $('app'), canvas = $('gl'), stage = $('stage'), dock = $('dock');
+  var emptyState = $('emptyState'), dropOverlay = $('dropOverlay');
+  var fileInputA = $('fileInputA'), fileInputB = $('fileInputB');
+  var bar = $('bar'), ruler = $('ruler');
+  var barLabel = $('barLabel'), barValue = $('barValue');
+  var tools = $('tools'), edgeL = $('edgeL'), edgeR = $('edgeR');
+  var flickerPanel = $('flickerPanel');
+  var layerChip = $('layerChip'), layerChipText = $('layerChipText'), layerGlyph = $('layerGlyph');
+  var roA = $('roA'), roB = $('roB');
+  var peekTag = $('peekTag'), zoomTag = $('zoomTag');
+  var slotA = $('slotA'), slotB = $('slotB');
+  var toolBtns = Array.prototype.slice.call(document.querySelectorAll('.tool'));
+
+  var ARC_C = 2 * Math.PI * 19;
+  toolBtns.forEach(function(b){
+    var fg = b.querySelector('.fg');
+    if(fg){ fg.style.strokeDasharray = ARC_C; fg.style.strokeDashoffset = ARC_C; }
+  });
+
+  // =============================================================
+  // Layer + app state
+  // =============================================================
+  function freshLayer(){
+    return {
+      hasImage:false, tex:null, imgW:0, imgH:0,
+      prepared:null, name:'',
+      zoom:1, panX:0, panY:0, rotation:0
+    };
+  }
+  var layers = { A: freshLayer(), B: freshLayer() };
+  var active = 'A';
+  var mix = { current:0.5, target:0.5 };   // 0 = all A, 1 = all B
+  var storedMix = 0.5;
+  var holdTime = 1.0;                      // seconds per flicker frame
+
+  function otherLetter(l){ return l === 'A' ? 'B' : 'A'; }
+  function hasAny(){ return layers.A.hasImage || layers.B.hasImage; }
+  function hasBoth(){ return layers.A.hasImage && layers.B.hasImage; }
+
+  // =============================================================
+  // WebGL
+  // =============================================================
+  var gl = null, glLost = false;
+  var mainProg, mainU = {}, mainA = -1, quad = null;
+  var fboScratch = null;
+
+  var VERT = [
+    'attribute vec2 a_position;',
+    'varying vec2 v_uv;',
+    'void main(){',
+    '  v_uv = a_position * 0.5 + 0.5;',
+    '  gl_Position = vec4(a_position, 0.0, 1.0);',
+    '}'
+  ].join('\n');
+
+  var MAIN_FRAG = [
+    'precision highp float;',
+    'varying vec2 v_uv;',
+    'uniform sampler2D u_texA;',
+    'uniform sampler2D u_texB;',
+    'uniform vec2 u_canvasSize;',
+    'uniform vec2 u_imageSizeA;',
+    'uniform vec2 u_imageSizeB;',
+    'uniform float u_rotationA;',
+    'uniform float u_rotationB;',
+    'uniform float u_zoomA;',
+    'uniform float u_zoomB;',
+    'uniform vec2 u_panA;',
+    'uniform vec2 u_panB;',
+    'uniform float u_fitScaleA;',
+    'uniform float u_fitScaleB;',
+    'uniform float u_hasA;',
+    'uniform float u_hasB;',
+    'uniform float u_showA;',
+    'uniform float u_showB;',
+    'uniform float u_mix;',
+    'uniform vec3 u_bg;',
+    '',
+    'vec2 mapUV(vec2 pix, float rotation, float zoomv, vec2 pan, vec2 imageSize, float fitScale){',
+    '  vec2 p = (pix - pan) / max(zoomv, 0.0001);',
+    '  float c = cos(-rotation), s = sin(-rotation);',
+    '  vec2 rp = vec2(p.x * c - p.y * s, p.x * s + p.y * c);',
+    '  rp /= max(fitScale, 0.0001);',
+    '  return rp / imageSize + 0.5;',
+    '}',
+    '',
+    'void main(){',
+    '  vec2 ndc = v_uv * 2.0 - 1.0;',
+    '  vec2 pix = ndc * u_canvasSize * 0.5;',
+    '',
+    '  vec2 uvA = mapUV(pix, u_rotationA, u_zoomA, u_panA, u_imageSizeA, u_fitScaleA);',
+    '  vec2 uvB = mapUV(pix, u_rotationB, u_zoomB, u_panB, u_imageSizeB, u_fitScaleB);',
+    '',
+    '  bool inA = (u_hasA > 0.5 && u_showA > 0.5) &&',
+    '             uvA.x >= 0.0 && uvA.x <= 1.0 && uvA.y >= 0.0 && uvA.y <= 1.0;',
+    '  bool inB = (u_hasB > 0.5 && u_showB > 0.5) &&',
+    '             uvB.x >= 0.0 && uvB.x <= 1.0 && uvB.y >= 0.0 && uvB.y <= 1.0;',
+    '',
+    '  vec3 colA = inA ? texture2D(u_texA, uvA).rgb : u_bg;',
+    '  vec3 colB = inB ? texture2D(u_texB, uvB).rgb : colA;',
+    '  gl_FragColor = vec4(mix(colA, colB, u_mix), 1.0);',
+    '}'
+  ].join('\n');
+
+  function makeProgram(vsSrc, fsSrc){
+    function sh(type, src){
+      var s = gl.createShader(type);
+      gl.shaderSource(s, src); gl.compileShader(s);
+      if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+        console.error('shader:', gl.getShaderInfoLog(s));
+      }
+      return s;
+    }
+    var p = gl.createProgram();
+    gl.attachShader(p, sh(gl.VERTEX_SHADER, vsSrc));
+    gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fsSrc));
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p, gl.LINK_STATUS)){
+      console.error('link:', gl.getProgramInfoLog(p));
+    }
+    return p;
+  }
+
+  function grabUniforms(prog, names){
+    var o = {};
+    names.forEach(function(n){ o[n] = gl.getUniformLocation(prog, n); });
+    return o;
+  }
+
+  function makeTex(){
+    var t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    return t;
+  }
+
+  function initGL(){
+    gl = canvas.getContext('webgl', { alpha:false, premultipliedAlpha:false, antialias:false })
+      || canvas.getContext('experimental-webgl');
+    if(!gl) return false;
+
+    mainProg = makeProgram(VERT, MAIN_FRAG);
+    mainA = gl.getAttribLocation(mainProg, 'a_position');
+    mainU = grabUniforms(mainProg, [
+      'u_texA','u_texB','u_canvasSize','u_imageSizeA','u_imageSizeB',
+      'u_rotationA','u_rotationB','u_zoomA','u_zoomB','u_panA','u_panB',
+      'u_fitScaleA','u_fitScaleB','u_hasA','u_hasB','u_showA','u_showB','u_mix','u_bg'
+    ]);
+
+    quad = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+    layers.A.tex = makeTex();
+    layers.B.tex = makeTex();
+    return true;
+  }
+
+  function makeFBO(w, h){
+    var tex = makeTex();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    var fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { fbo:fbo, tex:tex, w:w, h:h };
+  }
+  function killFBO(f){ if(!f) return; gl.deleteFramebuffer(f.fbo); gl.deleteTexture(f.tex); }
+
+  function bindQuad(attr){
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.enableVertexAttribArray(attr);
+    gl.vertexAttribPointer(attr, 2, gl.FLOAT, false, 0, 0);
+  }
+  function drawQuad(){ gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
+
+  function fitScaleFor(rot, iw, ih, cw, ch){
+    if(iw <= 0 || ih <= 0) return 1;
+    var c = Math.abs(Math.cos(rot)), s = Math.abs(Math.sin(rot));
+    return Math.min(cw / (iw * c + ih * s), ch / (iw * s + ih * c));
+  }
+
+  // Renders the composite into `target` (null = screen) at size w x h.
+  // showA/showB let export isolate a single layer against the shared background.
+  function drawComposite(target, w, h, showA, showB, mixAmt){
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target);
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(mainProg); bindQuad(mainA);
+
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, layers.A.tex);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, layers.B.tex);
+    gl.uniform1i(mainU.u_texA, 0);
+    gl.uniform1i(mainU.u_texB, 1);
+
+    gl.uniform2f(mainU.u_canvasSize, w, h);
+    gl.uniform2f(mainU.u_imageSizeA, layers.A.imgW || 1, layers.A.imgH || 1);
+    gl.uniform2f(mainU.u_imageSizeB, layers.B.imgW || 1, layers.B.imgH || 1);
+    gl.uniform1f(mainU.u_rotationA, layers.A.rotation);
+    gl.uniform1f(mainU.u_rotationB, layers.B.rotation);
+    gl.uniform1f(mainU.u_zoomA, layers.A.zoom);
+    gl.uniform1f(mainU.u_zoomB, layers.B.zoom);
+    gl.uniform2f(mainU.u_panA, layers.A.panX, layers.A.panY);
+    gl.uniform2f(mainU.u_panB, layers.B.panX, layers.B.panY);
+    gl.uniform1f(mainU.u_fitScaleA, fitScaleFor(layers.A.rotation, layers.A.imgW, layers.A.imgH, w, h));
+    gl.uniform1f(mainU.u_fitScaleB, fitScaleFor(layers.B.rotation, layers.B.imgW, layers.B.imgH, w, h));
+    gl.uniform1f(mainU.u_hasA, layers.A.hasImage ? 1 : 0);
+    gl.uniform1f(mainU.u_hasB, layers.B.hasImage ? 1 : 0);
+    gl.uniform1f(mainU.u_showA, showA ? 1 : 0);
+    gl.uniform1f(mainU.u_showB, showB ? 1 : 0);
+    gl.uniform1f(mainU.u_mix, mixAmt);
+    gl.uniform3f(mainU.u_bg, BG[0], BG[1], BG[2]);
+
+    drawQuad();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  // =============================================================
+  // Screen sizing + main paint
+  // =============================================================
+  function sizeCanvas(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(1, Math.round(stage.clientWidth * dpr));
+    var h = Math.max(1, Math.round(stage.clientHeight * dpr));
+    if(canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; }
+  }
+
+  function paint(){
+    if(!gl || glLost || !hasAny()) return;
+    sizeCanvas();
+    drawComposite(null, canvas.width, canvas.height, true, true, mix.current);
+  }
+
+  // Only the opacity/peek blend is eased, for a smooth crossfade; everything
+  // else (pan, zoom, rotation) is applied instantly for precise, direct control.
+  var running = false, lastT = 0;
+  function requestMixEase(){
+    if(running) return;
+    running = true; lastT = 0;
+    requestAnimationFrame(mixFrame);
+  }
+  function mixFrame(now){
+    if(!lastT) lastT = now;
+    var dt = Math.min((now - lastT) / 1000, 0.05);
+    lastT = now;
+    var k = 1 - Math.exp(-dt * MIX_EASE);
+    mix.current += (mix.target - mix.current) * k;
+    if(Math.abs(mix.target - mix.current) < 0.0015){
+      mix.current = mix.target;
+      paint();
+      running = false;
+      return;
+    }
+    paint();
+    requestAnimationFrame(mixFrame);
+  }
+
+  // =============================================================
+  // Image loading
+  // =============================================================
+  function truncate(s, n){ return (s && s.length > n) ? s.slice(0, n - 1) + '\u2026' : (s || ''); }
+
+  function prepare(source, maxDim){
+    var iw = source.width || source.naturalWidth || 1;
+    var ih = source.height || source.naturalHeight || 1;
+    var isBitmap = (typeof ImageBitmap !== 'undefined') && (source instanceof ImageBitmap);
+    if(iw <= maxDim && ih <= maxDim && !isBitmap) return { image:source, w:iw, h:ih };
+    var k = Math.min(maxDim / iw, maxDim / ih, 1);
+    var w = Math.max(1, Math.round(iw * k)), h = Math.max(1, Math.round(ih * k));
+    var c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(source, 0, 0, w, h);
+    return { image:c, w:w, h:h };
+  }
+
+  function uploadTexture(tex, prepared){
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, prepared.image);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  }
+
+  function updateReadouts(){
+    roA.textContent = layers.A.hasImage ? ('A \u00B7 ' + truncate(layers.A.name, 20) + ' \u00B7 ' + layers.A.imgW + '\u00D7' + layers.A.imgH) : '';
+    roB.textContent = layers.B.hasImage ? ('B \u00B7 ' + truncate(layers.B.name, 20) + ' \u00B7 ' + layers.B.imgW + '\u00D7' + layers.B.imgH) : '';
+    roA.classList.toggle('show', layers.A.hasImage);
+    roB.classList.toggle('show', layers.B.hasImage);
+  }
+
+  function loadInto(letter, source, name){
+    var layer = layers[letter];
+    var prepared = prepare(source, MAX_TEX);
+    layer.prepared = prepared;
+    layer.name = name || '';
+    layer.imgW = prepared.w; layer.imgH = prepared.h;
+    layer.zoom = 1; layer.panX = 0; layer.panY = 0; layer.rotation = 0;
+
+    if(!gl) return;
+    uploadTexture(layer.tex, prepared);
+    layer.hasImage = true;
+
+    emptyState.classList.toggle('hidden', hasAny());
+    app.classList.remove('chrome-hidden');
+    updateReadouts();
+    updateSlots();
+    refreshLayerChrome();
+    refreshAllTools();
+    syncBar();
+    paint();
+
+    // Once both are in, default the active layer to whichever just loaded
+    // second, since that's usually the one you're about to align.
+    if(hasBoth()) active = letter;
+    refreshLayerChrome();
+    syncBar();
+  }
+
+  function fallbackLoad(letter, file){
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){ loadInto(letter, img, file.name); URL.revokeObjectURL(url); };
+    img.onerror = function(){ URL.revokeObjectURL(url); };
+    img.src = url;
+  }
+
+  function handleFile(letter, file){
+    if(!file || !file.type || file.type.indexOf('image/') !== 0) return;
+    if(!gl) return;
+    if('createImageBitmap' in window){
+      var p;
+      try { p = createImageBitmap(file, { imageOrientation:'from-image' }); }
+      catch(e){ fallbackLoad(letter, file); return; }
+      p.then(function(b){ loadInto(letter, b, file.name); }, function(){ fallbackLoad(letter, file); });
+    } else {
+      fallbackLoad(letter, file);
+    }
+  }
+
+  function nextTargetLetter(){
+    if(!layers.A.hasImage) return 'A';
+    if(!layers.B.hasImage) return 'B';
+    return active;
+  }
+
+  function updateSlots(){
+    slotA.classList.toggle('filled', layers.A.hasImage);
+    slotB.classList.toggle('filled', layers.B.hasImage);
+    slotA.querySelector('.slabel').textContent = layers.A.hasImage ? truncate(layers.A.name, 16) : 'Load image A';
+    slotB.querySelector('.slabel').textContent = layers.B.hasImage ? truncate(layers.B.name, 16) : 'Load image B';
+  }
+
+  // =============================================================
+  // Active layer + chrome
+  // =============================================================
+  function setActive(letter){
+    active = letter;
+    refreshLayerChrome();
+    syncBar();
+  }
+
+  function refreshLayerChrome(){
+    var on = active.toLowerCase();
+    layerChip.classList.remove('a','b');
+    layerChip.classList.add(on);
+    layerChip.classList.toggle('hidden', !hasAny());
+    layerChip.querySelector('.dot').textContent = active;
+    layerChipText.textContent = hasBoth() ? 'editing ' + active : 'editing ' + active;
+    layerGlyph.textContent = active;
+    layerGlyph.style.color = active === 'A' ? 'var(--amber)' : 'var(--cyan)';
+  }
+
+  // =============================================================
+  // Sliders (zoom / rotate / opacity / flicker hold time)
+  // =============================================================
+  var SLIDERS = {
+    zoom: {
+      label:'Zoom', min:0.1, max:16, step:0.01, pxPerUnit:70,
+      fmt:function(v){ return Math.round(v * 100) + '%'; },
+      tagline:function(){ return 'Zoom \u00B7 layer ' + active; },
+      get:function(){ return layers[active].zoom; },
+      set:function(v){
+        var l = layers[active];
+        l.panX *= v / l.zoom; l.panY *= v / l.zoom;
+        l.zoom = v; paint();
+      }
+    },
+    rotate: {
+      label:'Rotate', min:-180, max:180, step:0.01, pxPerUnit:2.6,
+      fmt:function(v){ return v.toFixed(1) + '\u00B0'; },
+      tagline:function(){ return 'Rotate \u00B7 layer ' + active; },
+      get:function(){ var d = layers[active].rotation * 180 / Math.PI; return ((d + 180) % 360 + 360) % 360 - 180; },
+      set:function(deg){ layers[active].rotation = deg * Math.PI / 180; paint(); }
+    },
+    opacity: {
+      label:'Opacity', min:0, max:100, step:1, pxPerUnit:5,
+      fmt:function(v){ return Math.round(v) + '% B'; },
+      tagline:function(){ return 'Opacity \u00B7 blend A \u2192 B'; },
+      get:function(){ return mix.target * 100; },
+      set:function(v){ mix.target = v / 100; mix.current = mix.target; storedMix = mix.target; paint(); }
+    },
+    hold: {
+      label:'Flash speed', min:0.2, max:3, step:0.05, pxPerUnit:100,
+      fmt:function(v){ return v.toFixed(2) + 's / frame'; },
+      tagline:function(){ return 'Flash speed'; },
+      get:function(){ return holdTime; },
+      set:function(v){ holdTime = v; restartFlickerInterval(); }
+    }
+  };
+
+  var selected = null; // one of: zoom, rotate, opacity, hold, or null
+
+  function toolEl(key){
+    for(var i = 0; i < toolBtns.length; i++){
+      if(toolBtns[i].dataset.tool === key) return toolBtns[i];
+    }
+    return null;
+  }
+
+  function setBarText(label, value, off){
+    barLabel.textContent = label;
+    barValue.textContent = value;
+    barValue.classList.toggle('off', !!off);
+  }
+
+  function moveRuler(t){
+    var off = (t.get() - t.min) * t.pxPerUnit;
+    ruler.style.backgroundPosition = 'calc(50% + ' + off + 'px) 0, calc(50% + ' + off + 'px) 0';
+  }
+
+  function syncBar(){
+    bar.classList.remove('live', 'static');
+
+    if(flickerOpen){
+      var t = SLIDERS.hold;
+      bar.classList.add('live');
+      setBarText(t.tagline(), t.fmt(t.get()), false);
+      bar.setAttribute('aria-valuemin', t.min); bar.setAttribute('aria-valuemax', t.max);
+      bar.setAttribute('aria-valuenow', t.get());
+      moveRuler(t);
+      return;
+    }
+
+    if(!hasAny()){
+      bar.classList.add('static');
+      setBarText('Load two images to begin', '');
+      return;
+    }
+    if(!selected){
+      bar.classList.add('static');
+      setBarText('Tap a tool below', '', true);
+      return;
+    }
+    var s = SLIDERS[selected];
+    if(!s){ bar.classList.add('static'); setBarText('Tap a tool below', '', true); return; }
+    bar.classList.add('live');
+    setBarText(s.tagline(), s.fmt(s.get()), false);
+    bar.setAttribute('aria-valuemin', s.min); bar.setAttribute('aria-valuemax', s.max);
+    bar.setAttribute('aria-valuenow', s.get());
+    bar.setAttribute('aria-label', s.label);
+    moveRuler(s);
+  }
+
+  // Drag: gain rises with pointer speed, so a slow push is sub-step precise
+  // and a fast flick crosses the whole range. Rotation and zoom never snap.
+  var dragging = false, dragId = null, lastX = 0, lastTime = 0, raw = 0;
+
+  function gainFor(speed){
+    return 0.4 + Math.min(5.6, Math.pow(Math.abs(speed) * 2.2, 1.8));
+  }
+
+  function activeSlider(){
+    if(flickerOpen) return SLIDERS.hold;
+    return selected ? SLIDERS[selected] : null;
+  }
+
+  bar.addEventListener('pointerdown', function(e){
+    var s = activeSlider();
+    if(!s || (!hasAny() && !flickerOpen)) return;
+    dragging = true; dragId = e.pointerId;
+    lastX = e.clientX; lastTime = e.timeStamp || performance.now();
+    raw = s.get();
+    try { bar.setPointerCapture(dragId); } catch(err){}
+    e.preventDefault();
+  });
+
+  bar.addEventListener('pointermove', function(e){
+    if(!dragging || e.pointerId !== dragId) return;
+    var s = activeSlider();
+    if(!s) return;
+    var now = e.timeStamp || performance.now();
+    var dt = Math.max(1, now - lastTime);
+    var dx = e.clientX - lastX;
+    lastX = e.clientX; lastTime = now;
+
+    raw += (dx * gainFor(dx / dt)) / s.pxPerUnit;
+    raw = Math.max(s.min, Math.min(s.max, raw));
+    s.set(raw);
+    syncBar();
+    e.preventDefault();
+  });
+
+  function endDrag(e){
+    if(!dragging || (e && e.pointerId !== dragId)) return;
+    dragging = false;
+    try { bar.releasePointerCapture(dragId); } catch(err){}
+    dragId = null;
+  }
+  bar.addEventListener('pointerup', endDrag);
+  bar.addEventListener('pointercancel', endDrag);
+
+  bar.addEventListener('wheel', function(e){
+    var s = activeSlider();
+    if(!s) return;
+    e.preventDefault();
+    var dir = (e.deltaY || e.deltaX) > 0 ? -1 : 1;
+    s.set(Math.max(s.min, Math.min(s.max, s.get() + dir * s.step * (e.shiftKey ? 10 : 1))));
+    syncBar();
+  }, { passive:false });
+
+  bar.addEventListener('keydown', function(e){
+    var s = activeSlider();
+    if(!s) return;
+    var step = s.step * (e.shiftKey ? 10 : 1);
+    if(e.key === 'ArrowRight' || e.key === 'ArrowUp'){ s.set(Math.min(s.max, s.get() + step)); syncBar(); e.preventDefault(); }
+    else if(e.key === 'ArrowLeft' || e.key === 'ArrowDown'){ s.set(Math.max(s.min, s.get() - step)); syncBar(); e.preventDefault(); }
+    else if(e.key === 'Home'){ s.set(s.min); syncBar(); e.preventDefault(); }
+    else if(e.key === 'End'){ s.set(s.max); syncBar(); e.preventDefault(); }
+  });
+
+  // =============================================================
+  // Tool buttons
+  // =============================================================
+  function buzz(ms){ try { if(navigator.vibrate) navigator.vibrate(ms); } catch(e){} }
+
+  function resetActiveLayer(){
+    var l = layers[active];
+    l.zoom = 1; l.panX = 0; l.panY = 0; l.rotation = 0;
+    paint(); syncBar();
+  }
+
+  function swapLayers(){
+    var t = layers.A; layers.A = layers.B; layers.B = t;
+    updateReadouts(); updateSlots(); refreshLayerChrome();
+    paint(); syncBar();
+  }
+
+  function refreshAllTools(){
+    ['openA','openB','swap','layer','zoom','rotate','opacity','reset','flicker'].forEach(function(k){
+      var el = toolEl(k);
+      if(!el) return;
+      var disabled = false;
+      if(k === 'swap' || k === 'layer' || k === 'reset') disabled = !hasAny();
+      if(k === 'zoom' || k === 'rotate' || k === 'opacity') disabled = !hasAny();
+      if(k === 'flicker') disabled = !hasBoth();
+      el.disabled = disabled;
+      el.classList.toggle('is-selected', selected === k);
+    });
+    refreshArc('zoom'); refreshArc('rotate'); refreshArc('opacity');
+  }
+
+  function refreshArc(key){
+    var el = toolEl(key), fg = el && el.querySelector('.fg');
+    if(!fg) return;
+    var s = SLIDERS[key];
+    var frac = (s.get() - s.min) / (s.max - s.min);
+    frac = Math.max(0.03, Math.min(1, frac));
+    fg.style.strokeDashoffset = ARC_C * (1 - frac);
+    el.classList.add('is-on');
+  }
+
+  toolBtns.forEach(function(btn){
+    var key = btn.dataset.tool;
+    btn.addEventListener('click', function(){
+      if(btn.disabled) return;
+      if(key === 'openA'){ fileInputA.click(); return; }
+      if(key === 'openB'){ fileInputB.click(); return; }
+      if(key === 'swap'){ buzz(10); swapLayers(); return; }
+      if(key === 'layer'){ buzz(8); setActive(otherLetter(active)); refreshAllTools(); return; }
+      if(key === 'reset'){ buzz(10); resetActiveLayer(); return; }
+      if(key === 'flicker'){ flickerOpen ? closeFlicker() : openFlicker(); return; }
+
+      // zoom / rotate / opacity: select for the scrub bar
+      selected = key;
+      syncBar();
+      refreshAllTools();
+    });
+  });
+
+  // =============================================================
+  // Stage gestures
+  // =============================================================
+  function toCanvas(clientX, clientY){
+    var r = stage.getBoundingClientRect();
+    var sx = canvas.width / Math.max(1, r.width);
+    var sy = canvas.height / Math.max(1, r.height);
+    return {
+      x: (clientX - r.left) * sx - canvas.width / 2,
+      y: -((clientY - r.top) * sy - canvas.height / 2)
+    };
+  }
+  function dprX(){ return canvas.width / Math.max(1, stage.getBoundingClientRect().width); }
+  function dprY(){ return canvas.height / Math.max(1, stage.getBoundingClientRect().height); }
+
+  var zoomTagTimer = null;
+  function showZoomTag(){
+    zoomTag.textContent = Math.round(layers[active].zoom * 100) + '%';
+    zoomTag.classList.add('show');
+    clearTimeout(zoomTagTimer);
+    zoomTagTimer = setTimeout(function(){ zoomTag.classList.remove('show'); }, 1300);
+  }
+
+  function zoomAboutLayer(letter, pt, factor){
+    var l = layers[letter];
+    var z = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, l.zoom * factor));
+    var k = z / l.zoom;
+    if(k === 1) return;
+    l.panX = pt.x - (pt.x - l.panX) * k;
+    l.panY = pt.y - (pt.y - l.panY) * k;
+    l.zoom = z;
+  }
+
+  var pointers = {}, pinch = null, panning = false;
+  var holdTimer = null, downX = 0, downY = 0, moved = false, held = false;
+
+  function pointerList(){
+    var out = [];
+    for(var k in pointers){ if(pointers.hasOwnProperty(k)) out.push(pointers[k]); }
+    return out;
+  }
+
+  function beginPinch(){
+    var p = pointerList();
+    if(p.length < 2) return;
+    var mid = toCanvas((p[0].x + p[1].x) / 2, (p[0].y + p[1].y) / 2);
+    pinch = {
+      dist: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1,
+      angle: Math.atan2(p[0].y - p[1].y, p[0].x - p[1].x),
+      mid: mid
+    };
+    clearTimeout(holdTimer);
+    if(held){ held = false; endPeek(); }
+    panning = false;
+  }
+
+  function startPeek(){
+    held = true;
+    // Peek fully at whichever layer is currently less visible.
+    var target = mix.target <= 0.5 ? 1 : 0;
+    mix.target = target;
+    requestMixEase();
+    peekTag.classList.remove('a','b');
+    peekTag.classList.add(target > 0.5 ? 'b' : 'a');
+    peekTag.textContent = 'SHOWING ' + (target > 0.5 ? 'B' : 'A');
+    peekTag.classList.add('show');
+  }
+  function endPeek(){
+    held = false;
+    mix.target = storedMix;
+    requestMixEase();
+    peekTag.classList.remove('show');
+  }
+
+  stage.addEventListener('pointerdown', function(e){
+    if(!hasAny() || flickerOpen) return;
+    pointers[e.pointerId] = { x:e.clientX, y:e.clientY };
+    try { stage.setPointerCapture(e.pointerId); } catch(err){}
+
+    if(pointerList().length === 2){ beginPinch(); return; }
+    if(pointerList().length > 2) return;
+
+    downX = e.clientX; downY = e.clientY; moved = false; held = false; panning = false;
+    holdTimer = setTimeout(function(){
+      if(panning) return;
+      startPeek();
+    }, HOLD_MS);
+  });
+
+  stage.addEventListener('pointermove', function(e){
+    if(!pointers[e.pointerId]) return;
+    var prev = pointers[e.pointerId];
+    var dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+    pointers[e.pointerId] = { x:e.clientX, y:e.clientY };
+
+    var list = pointerList();
+    if(list.length >= 2){
+      if(!pinch) beginPinch();
+      var dist = Math.hypot(list[0].x - list[1].x, list[0].y - list[1].y) || 1;
+      var angle = Math.atan2(list[0].y - list[1].y, list[0].x - list[1].x);
+      var mid = toCanvas((list[0].x + list[1].x) / 2, (list[0].y + list[1].y) / 2);
+      var l = layers[active];
+
+      l.panX += mid.x - pinch.mid.x;
+      l.panY += mid.y - pinch.mid.y;
+      pinch.mid = mid;
+
+      zoomAboutLayer(active, mid, dist / pinch.dist);
+      pinch.dist = dist;
+
+      // Continuous, unsnapped rotation: the twist angle maps straight onto
+      // the layer's rotation, precise to the fraction of a degree.
+      var dAngle = angle - pinch.angle;
+      if(dAngle > Math.PI) dAngle -= Math.PI * 2;
+      if(dAngle < -Math.PI) dAngle += Math.PI * 2;
+      l.rotation += dAngle;
+      pinch.angle = angle;
+
+      paint(); showZoomTag();
+      if(selected === 'zoom' || selected === 'rotate') syncBar();
+      e.preventDefault();
+      return;
+    }
+
+    if(Math.abs(e.clientX - downX) > 8 || Math.abs(e.clientY - downY) > 8){
+      moved = true;
+      clearTimeout(holdTimer);
+      if(!held) panning = true;
+    }
+
+    if(panning && !held){
+      var l2 = layers[active];
+      l2.panX += dx * dprX();
+      l2.panY -= dy * dprY();
+      paint();
+      e.preventDefault();
+    }
+  });
+
+  function stageUp(e){
+    if(e && pointers[e.pointerId]) delete pointers[e.pointerId];
+    if(pointerList().length < 2) pinch = null;
+    if(pointerList().length > 0) return;
+
+    clearTimeout(holdTimer);
+    if(held){
+      endPeek();
+    } else if(!moved && !panning && hasAny() && !flickerOpen){
+      // Plain tap on the stage: switch which layer you're steering.
+      setActive(otherLetter(active));
+      refreshAllTools();
+    }
+    held = false; panning = false;
+  }
+  stage.addEventListener('pointerup', stageUp);
+  stage.addEventListener('pointercancel', stageUp);
+
+  stage.addEventListener('dblclick', function(){
+    if(!hasAny() || flickerOpen) return;
+    resetActiveLayer();
+  });
+
+  stage.addEventListener('wheel', function(e){
+    if(!hasAny() || flickerOpen) return;
+    e.preventDefault();
+    var d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    zoomAboutLayer(active, toCanvas(e.clientX, e.clientY), Math.exp(-d * 0.0022));
+    paint(); showZoomTag();
+    if(selected === 'zoom') syncBar();
+  }, { passive:false });
+
+  layerChip.addEventListener('click', function(){
+    if(!hasAny()) return;
+    setActive(otherLetter(active));
+    refreshAllTools();
+  });
+
+  // =============================================================
+  // Flicker export panel
+  // =============================================================
+  var flickerOpen = false, flickerInterval = null;
+  var previewA = $('previewA'), previewB = $('previewB'), previewTag = $('previewTag');
+  var genBtn = $('genBtn'), dlBtn = $('dlBtn'), genStatus = $('genStatus');
+  var lastGifUrl = null;
+
+  // Browsers refuse to construct a Worker from a cross-origin script even
+  // when the CDN sends CORS headers — the worker itself must be same-origin.
+  // Fetching the script and handing GIF.js a blob: URL satisfies that, and
+  // we only need to do it once per page load.
+  var WORKER_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js';
+  var workerBlobUrlPromise = null;
+  function getWorkerScriptURL(){
+    if(!workerBlobUrlPromise){
+      workerBlobUrlPromise = fetch(WORKER_SRC)
+        .then(function(res){
+          if(!res.ok) throw new Error('worker fetch failed: ' + res.status);
+          return res.blob();
+        })
+        .then(function(blob){ return URL.createObjectURL(blob); });
+    }
+    return workerBlobUrlPromise;
+  }
+
+  function readFBOToCanvas(cv, w, h, showA, showB){
+    var out = makeFBO(w, h);
+    drawComposite(out.fbo, w, h, showA, showB, 1.0);
+    var px = new Uint8Array(w * h * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, out.fbo);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    killFBO(out);
+
+    cv.width = w; cv.height = h;
+    var ctx = cv.getContext('2d');
+    var img = ctx.createImageData(w, h);
+    var row = w * 4;
+    for(var y = 0; y < h; y++){
+      img.data.set(px.subarray((h - 1 - y) * row, (h - y) * row), y * row);
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  function frameSize(maxSide){
+    var cw = stage.clientWidth || 4, ch = stage.clientHeight || 3;
+    var k = maxSide / Math.max(cw, ch);
+    if(k >= 1) return { w: Math.round(cw), h: Math.round(ch) };
+    return { w: Math.max(1, Math.round(cw * k)), h: Math.max(1, Math.round(ch * k)) };
+  }
+
+  function renderPreviewFrames(){
+    var size = frameSize(560);
+    readFBOToCanvas(previewA, size.w, size.h, true, false);
+    readFBOToCanvas(previewB, size.w, size.h, false, true);
+  }
+
+  function restartFlickerInterval(){
+    clearInterval(flickerInterval);
+    if(!flickerOpen) return;
+    var showingB = false;
+    previewB.style.opacity = 0;
+    previewTag.textContent = 'A'; previewTag.classList.remove('b'); previewTag.classList.add('a');
+    flickerInterval = setInterval(function(){
+      showingB = !showingB;
+      previewB.style.opacity = showingB ? 1 : 0;
+      previewTag.textContent = showingB ? 'B' : 'A';
+      previewTag.classList.toggle('a', !showingB);
+      previewTag.classList.toggle('b', showingB);
+    }, Math.max(120, holdTime * 1000));
+  }
+
+  function openFlicker(){
+    if(!hasBoth()) return;
+    flickerOpen = true;
+    flickerPanel.classList.add('open');
+    dock.classList.add('flicker-open');
+    app.classList.remove('chrome-hidden');
+    genStatus.textContent = '';
+    dlBtn.classList.remove('show');
+    if(lastGifUrl){ URL.revokeObjectURL(lastGifUrl); lastGifUrl = null; }
+    getWorkerScriptURL().catch(function(){ /* surfaced again on Generate click */ });
+    requestAnimationFrame(function(){ renderPreviewFrames(); restartFlickerInterval(); });
+    syncBar();
+    toolEl('flicker').setAttribute('aria-pressed', 'true');
+  }
+
+  function closeFlicker(){
+    flickerOpen = false;
+    clearInterval(flickerInterval);
+    flickerPanel.classList.remove('open');
+    dock.classList.remove('flicker-open');
+    toolEl('flicker').setAttribute('aria-pressed', 'false');
+    syncBar();
+    updateEdges();
+    paint();
+  }
+
+  genBtn.addEventListener('click', function(){
+    if(!hasBoth() || !window.GIF){
+      genStatus.textContent = window.GIF ? 'Load both images first.' : 'GIF encoder failed to load.';
+      return;
+    }
+    genBtn.disabled = true;
+    dlBtn.classList.remove('show');
+    genStatus.textContent = 'Preparing encoder\u2026';
+
+    getWorkerScriptURL().then(function(workerUrl){
+      genStatus.textContent = 'Rendering frames\u2026';
+
+      var size = frameSize(820);
+      var cvA = document.createElement('canvas');
+      var cvB = document.createElement('canvas');
+      readFBOToCanvas(cvA, size.w, size.h, true, false);
+      readFBOToCanvas(cvB, size.w, size.h, false, true);
+
+      var gif = new GIF({
+        workers: 2,
+        quality: 8,
+        globalPalette: true,
+        width: size.w,
+        height: size.h,
+        workerScript: workerUrl
+      });
+      var delay = Math.round(holdTime * 1000);
+      gif.addFrame(cvA, { delay: delay });
+      gif.addFrame(cvB, { delay: delay });
+
+      genStatus.textContent = 'Encoding GIF\u2026';
+      gif.on('progress', function(p){
+        genStatus.textContent = 'Encoding GIF\u2026 ' + Math.round(p * 100) + '%';
+      });
+      gif.on('finished', function(blob){
+        if(lastGifUrl) URL.revokeObjectURL(lastGifUrl);
+        lastGifUrl = URL.createObjectURL(blob);
+        dlBtn.href = lastGifUrl;
+        dlBtn.classList.add('show');
+        genStatus.textContent = 'Ready \u2014 ' + Math.round(blob.size / 1024) + ' KB';
+        genBtn.disabled = false;
+      });
+      gif.render();
+    }).catch(function(err){
+      console.error(err);
+      genStatus.textContent = 'Could not load the GIF encoder (check your connection).';
+      genBtn.disabled = false;
+    });
+  });
+
+  // =============================================================
+  // File input, drop, paste
+  // =============================================================
+  fileInputA.addEventListener('change', function(e){
+    var f = e.target.files && e.target.files[0];
+    if(f) handleFile('A', f);
+    fileInputA.value = '';
+  });
+  fileInputB.addEventListener('change', function(e){
+    var f = e.target.files && e.target.files[0];
+    if(f) handleFile('B', f);
+    fileInputB.value = '';
+  });
+  slotA.addEventListener('click', function(){ fileInputA.click(); });
+  slotB.addEventListener('click', function(){ fileInputB.click(); });
+
+  var dragDepth = 0;
+  window.addEventListener('dragenter', function(e){
+    e.preventDefault(); dragDepth++; dropOverlay.classList.add('active');
+  });
+  window.addEventListener('dragover', function(e){ e.preventDefault(); });
+  window.addEventListener('dragleave', function(){
+    dragDepth = Math.max(0, dragDepth - 1);
+    if(!dragDepth) dropOverlay.classList.remove('active');
+  });
+  window.addEventListener('drop', function(e){
+    e.preventDefault(); dragDepth = 0; dropOverlay.classList.remove('active');
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) handleFile(nextTargetLetter(), f);
+  });
+  window.addEventListener('paste', function(e){
+    var items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    for(var i = 0; i < items.length; i++){
+      if(items[i].type && items[i].type.indexOf('image/') === 0){
+        var f = items[i].getAsFile();
+        if(f){ handleFile(nextTargetLetter(), f); e.preventDefault(); }
+        break;
+      }
+    }
+  });
+
+  // =============================================================
+  // Tool carousel: native touch scrolling, mouse drag, edge hints
+  // =============================================================
+  var suppressClick = false;
+  function updateEdges(){
+    var max = tools.scrollWidth - tools.clientWidth;
+    edgeL.classList.toggle('show', max > 2 && tools.scrollLeft > 2);
+    edgeR.classList.toggle('show', max > 2 && tools.scrollLeft < max - 2);
+  }
+  tools.addEventListener('scroll', updateEdges);
+  edgeL.addEventListener('click', function(){ tools.scrollLeft -= 150; });
+  edgeR.addEventListener('click', function(){ tools.scrollLeft += 150; });
+
+  var tDrag = false, tId = null, tX = 0, tMoved = 0;
+  tools.addEventListener('pointerdown', function(e){
+    if(e.pointerType !== 'mouse') return;
+    tDrag = true; tId = e.pointerId; tX = e.clientX; tMoved = 0;
+  });
+  tools.addEventListener('pointermove', function(e){
+    if(!tDrag || e.pointerId !== tId) return;
+    var dx = e.clientX - tX; tX = e.clientX;
+    tMoved += Math.abs(dx);
+    tools.scrollLeft -= dx;
+    if(tMoved > 6) suppressClick = true;
+  });
+  function endToolDrag(){ tDrag = false; tId = null; }
+  tools.addEventListener('pointerup', endToolDrag);
+  tools.addEventListener('pointercancel', endToolDrag);
+  tools.addEventListener('pointerleave', endToolDrag);
+
+  // =============================================================
+  // Keyboard
+  // =============================================================
+  function clickTool(key){
+    var el = toolEl(key);
+    if(el && !el.disabled) el.click();
+  }
+  window.addEventListener('keydown', function(e){
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    var tag = document.activeElement && document.activeElement.tagName;
+    if(tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if(document.activeElement === bar && e.key.indexOf('Arrow') === 0) return;
+
+    switch(e.key.toLowerCase()){
+      case 'a': fileInputA.click(); break;
+      case 'b': fileInputB.click(); break;
+      case 's': clickTool('swap'); break;
+      case 'l': clickTool('layer'); break;
+      case 'z': clickTool('zoom'); break;
+      case 'r': clickTool('rotate'); break;
+      case 'o': clickTool('opacity'); break;
+      case 'f': clickTool('flicker'); break;
+      case 'x': clickTool('reset'); break;
+      case '=':
+      case '+': zoomAboutLayer(active, {x:0,y:0}, 1.25); paint(); showZoomTag(); if(selected==='zoom') syncBar(); break;
+      case '-': zoomAboutLayer(active, {x:0,y:0}, 0.8); paint(); showZoomTag(); if(selected==='zoom') syncBar(); break;
+      case 'escape':
+        if(flickerOpen) closeFlicker();
+        else { selected = null; syncBar(); refreshAllTools(); }
+        break;
+    }
+  });
+
+  // =============================================================
+  // Resize and context loss
+  // =============================================================
+  function onResize(){
+    sizeCanvas(); paint(); updateEdges();
+    if(flickerOpen) renderPreviewFrames();
+  }
+  if('ResizeObserver' in window){
+    var rtim = null;
+    new ResizeObserver(function(){ clearTimeout(rtim); rtim = setTimeout(onResize, 90); }).observe(stage);
+  } else {
+    window.addEventListener('resize', onResize);
+  }
+
+  canvas.addEventListener('webglcontextlost', function(e){
+    e.preventDefault();
+    glLost = true; running = false;
+    setBarText('Restoring graphics\u2026', '');
+  });
+  canvas.addEventListener('webglcontextrestored', function(){
+    glLost = false;
+    if(!initGL()) return;
+    if(layers.A.prepared) uploadTexture(layers.A.tex, layers.A.prepared);
+    if(layers.B.prepared) uploadTexture(layers.B.tex, layers.B.prepared);
+    syncBar(); paint();
+  });
+
+  // =============================================================
+  // Boot
+  // =============================================================
+  if(!initGL()){
+    document.querySelector('.wordmark').textContent = 'NO WEBGL';
+    document.querySelector('.blurb').textContent =
+      'This browser cannot run WebGL, which Flicker needs in order to render.';
+    document.getElementById('slots').style.display = 'none';
+  }
+  refreshLayerChrome();
+  refreshAllTools();
+  syncBar();
+  sizeCanvas();
+  requestAnimationFrame(updateEdges);
+
+})();
+</script>
+</body>
+</html>
