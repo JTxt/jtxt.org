@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<title>Work — James Thomas | Creative Technologist | Salt Lake City</title>
+	<meta name="description" content="Things James Thomas has made: free tools for artists, and games made at game jams.">
+	<link rel="canonical" href="https://jtxt.org/work/">
+
+	<meta property="og:type" content="website">
+	<meta property="og:url" content="https://jtxt.org/work/">
+	<meta property="og:title" content="Work — James Thomas">
+	<meta property="og:description" content="things i've made: free tools for artists, and game jam games.">
+
+	<style>
+		:root {
+			--bg: #121212;
+			--text-bright: #eaeaea;
+			--text-mid: #cfcfcf;
+			--text-dim: #8a8a8a;
+			--accent: #4da3ff;
+			--rule: #2a2a2a;
+			--gap: clamp(2rem, 6vw, 4.5rem);
+		}
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+			background: var(--bg);
+			color: var(--text-mid);
+			min-height: 100vh;
+			display: flex;
+			justify-content: center;
+			padding: clamp(2rem, 6vh, 5rem) 1.5rem;
+		}
+
+		.page {
+			width: 100%;
+			max-width: 900px;
+			display: grid;
+			grid-template-columns: minmax(180px, 260px) 1fr;
+			gap: var(--gap);
+			align-items: start;
+		}
+
+		/* left column: identity, stays put */
+		.identity h1 {
+			font-size: 1.6rem;
+			font-weight: 600;
+			letter-spacing: 0.04em;
+			margin-bottom: 0.6rem;
+		}
+		.identity h1 a { color: var(--text-bright); text-decoration: none; }
+		.identity h1 a:hover, .identity h1 a:focus-visible { color: var(--accent); }
+		.identity .tagline {
+			font-size: 1rem;
+			color: var(--text-mid);
+			line-height: 1.5;
+			margin-bottom: 0.4rem;
+		}
+		.identity .location {
+			font-size: 0.9rem;
+			color: var(--text-dim);
+			margin-bottom: 1.75rem;
+		}
+		.identity .home { font-size: 0.9rem; }
+		.identity .home a { color: var(--text-dim); text-decoration: none; }
+		.identity .home a:hover, .identity .home a:focus-visible { color: var(--accent); }
+
+		/* right column: projects */
+		.section { margin-bottom: 3rem; }
+		.section:last-child { margin-bottom: 0; }
+
+		.section-label {
+			font-size: 0.75rem;
+			letter-spacing: 0.08em;
+			color: var(--text-dim);
+			margin-bottom: 0.9rem;
+		}
+
+		.project { margin-bottom: 2.25rem; }
+		.project:last-child { margin-bottom: 0; }
+
+		.work-title {
+			font-size: 1.15rem;
+			color: var(--accent);
+			text-decoration: none;
+			font-weight: 500;
+		}
+		.work-title:hover, .work-title:focus-visible { text-decoration: underline; }
+
+		.meta {
+			font-size: 0.8rem;
+			color: var(--text-dim);
+			margin-top: 0.25rem;
+		}
+
+		.project p.about {
+			color: var(--text-dim);
+			line-height: 1.6;
+			margin-top: 0.5rem;
+			max-width: 52ch;
+			font-size: 0.95rem;
+		}
+		.project p.links {
+			margin-top: 0.5rem;
+			font-size: 0.9rem;
+		}
+
+		.shot {
+			display: block;
+			margin-top: 0.75rem;
+			max-width: 440px;
+		}
+		.shot img {
+			display: block;
+			width: 100%;
+			height: auto;
+			border: 1px solid var(--rule);
+			border-radius: 4px;
+		}
+
+		a { color: var(--accent); }
+
+		.legal {
+			grid-column: 1 / -1;
+			padding-top: 1.5rem;
+			border-top: 1px solid var(--rule);
+			font-size: 0.8rem;
+			color: var(--text-dim);
+		}
+
+		/* mobile: stack, identity block first */
+		@media (max-width: 620px) {
+			.page {
+				grid-template-columns: 1fr;
+				gap: 2.25rem;
+			}
+			.identity {
+				padding-bottom: 1.75rem;
+				border-bottom: 1px solid var(--rule);
+			}
+			.identity h1 { font-size: 1.4rem; }
+		}
+	</style>
+</head>
+<body>
+	<div class="page">
+
+		<div class="identity">
+			<h1><a href="/">james thomas</a></h1>
+			<p class="tagline">i work where art meets code</p>
+			<p class="location">salt lake city, utah</p>
+			<p class="home"><a href="/">← home</a></p>
+		</div>
+
+		<div class="content">
+			<div class="section">
+				<div class="section-label">tools for artists</div>
+
+				<article class="project" id="squint">
+					<a class="work-title" href="/tools/squint/">squint</a>
+					<p class="meta">2026 · design and code</p>
+					<p class="about">see your reference the way painters squint at it. a free tool that blurs and posterizes photos into simple value shapes, so you can nail proportions before the details. it started on art subreddits, where i was breaking people's references into value shapes by hand. works on your phone or computer, and nothing gets uploaded.</p>
+					<p class="links"><a href="/tools/squint/">open squint</a></p>
+				</article>
+
+				<article class="project" id="flicker">
+					<a class="work-title" href="/tools/compare/">flicker</a>
+					<p class="meta">2026 · design and code</p>
+					<p class="about">a flip test for artists. load your drawing and your reference, then pan, zoom, and rotate the reference to line it up. flip between them to spot what's off, and export a gif.</p>
+					<p class="links"><a href="/tools/compare/">open flicker</a></p>
+				</article>
+			</div>
+
+			<div class="section">
+				<div class="section-label">game jams</div>
+
+				<article class="project" id="season">
+					<a class="work-title" href="https://jtxt.itch.io/season" target="_blank" rel="noopener">season</a>
+					<p class="meta">1st SL Animation Expo game jam · godot</p>
+					<a class="shot" href="https://jtxt.itch.io/season" target="_blank" rel="noopener">
+						<img src="season/hero.webp" width="510" height="491" loading="lazy"
+							alt="SeaSon title screen: clay coral, clay lettering, and a small sea creature peeking over a yellow clay sea floor">
+					</a>
+					<p class="about">a claymation underwater game: find the pearls, drag to aim, let go to swim. i did the programming, concept, and design, and photographed the clay art. made with a team of animators: CandyDagger, Donny Jennings, Joseph Jennings, and Nick Tanner.</p>
+					<p class="links"><a href="https://jtxt.itch.io/season" target="_blank" rel="noopener">play it in the browser</a></p>
+				</article>
+
+				<article class="project" id="maladraxous">
+					<a class="work-title" href="https://jtxt.itch.io/maladraxous" target="_blank" rel="noopener">maladraxous</a>
+					<p class="meta">spacestation game jam · scratch</p>
+					<a class="shot" href="https://jtxt.itch.io/maladraxous" target="_blank" rel="noopener">
+						<img src="maladraxous/hero.webp" width="900" height="672" loading="lazy"
+							alt="Maladraxous title card: a hand-drawn sword over tangled black roots, with a dripping red title">
+					</a>
+					<p class="about">a fast survival game where sentient food must be clicked, and it's different every time. i did the game design and programming. music and sound by TacoLord; art by canaan, lane, grin, Mr. Foot, and nickfrusso.</p>
+					<p class="links">
+						<a href="https://jtxt.itch.io/maladraxous" target="_blank" rel="noopener">play on itch.io</a> ·
+						<a href="https://scratch.mit.edu/projects/746235230/" target="_blank" rel="noopener">see it on scratch</a>
+					</p>
+				</article>
+			</div>
+		</div>
+
+		<footer class="legal">jtxt.org is operated by James Thomas Consulting LLC</footer>
+
+	</div>
+</body>
+</html>
