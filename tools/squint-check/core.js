@@ -1,5 +1,6 @@
 /* Squint & Check. Shared by both tabs: settings, the DOM, the view and render loop, UI sync, tabs, loading the reference, saving.
-   Loaded by index.html; the scripts share one global scope. */
+   Loaded by index.html; the scripts share one global scope.
+   co-authors: jtxt.org and claude opus 5.5 */
 "use strict";
 
 function $(id){ return document.getElementById(id); }

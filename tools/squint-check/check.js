@@ -1,5 +1,6 @@
 /* Squint & Check. Drawing Check: placing the drawing on the reference, the outline, the frame, the matcher worker, and saving.
-   Loaded by index.html; the scripts share one global scope. */
+   Loaded by index.html; the scripts share one global scope.
+   co-authors: jtxt.org and claude opus 5.5 */
 "use strict";
 
 // =============================================================

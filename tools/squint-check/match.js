@@ -16,6 +16,8 @@
  *
  * Images are {width, height, data}: RGBA bytes (like canvas ImageData) or one
  * gray value per pixel (bytes 0..255 or floats 0..1). Transparent pixels count as white paper.
+ *
+ * co-authors: jtxt.org and claude opus 5.5
  */
 (function (root, factory) {
   var api = factory();

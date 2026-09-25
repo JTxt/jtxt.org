@@ -1,5 +1,6 @@
 /* Squint & Check. Reference Squint: value analysis, the value strip, its controls, Looks, the value readout, and saving.
-   Loaded by index.html; the scripts share one global scope. */
+   Loaded by index.html; the scripts share one global scope.
+   co-authors: jtxt.org and claude opus 5.5 */
 "use strict";
 
 // =============================================================

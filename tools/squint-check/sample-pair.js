@@ -4,6 +4,8 @@
  * drawing is on a noisy page, scaled, turned 6° and moved, the way a photo of a
  * real drawing would be. Taken from the Drawing matcher's "Noisy page,
  * proportion errors" sample (jtxt.org/tools/compare/).
+ *
+ * co-authors: jtxt.org and claude opus 5.5
  */
 (function (root) {
   'use strict';

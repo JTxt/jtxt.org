@@ -9,6 +9,8 @@
  *   { type:'refine', id, P }                           snap from a placement {scale, theta, tx, ty}
  *   { type:'edges', id, which, maxSide }               'ref' or 'draw': the matcher's edges as a distance field
  * Every reply carries the same type and id, plus `error` if it failed.
+ *
+ * co-authors: jtxt.org and claude opus 5.5
  */
 importScripts('match.js');
 

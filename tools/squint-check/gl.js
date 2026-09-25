@@ -1,5 +1,6 @@
 /* Squint & Check. WebGL: programs, textures, framebuffers, the blur pyramid, and drawing the Squint view.
-   Loaded by index.html; the scripts share one global scope. */
+   Loaded by index.html; the scripts share one global scope.
+   co-authors: jtxt.org and claude opus 5.5 */
 "use strict";
 
 // =============================================================

@@ -1,5 +1,6 @@
 /* Squint & Check. The GLSL programs: the Squint blur passes and value bands, and the Drawing Check composite.
-   Loaded by index.html; the scripts share one global scope. */
+   Loaded by index.html; the scripts share one global scope.
+   co-authors: jtxt.org and claude opus 5.5 */
 "use strict";
 
 var VERT = 'attribute vec2 a_position; varying vec2 v_uv;' +

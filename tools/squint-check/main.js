@@ -1,5 +1,6 @@
 /* Squint & Check. Resize, theme and context loss, then boot.
-   Loaded by index.html; the scripts share one global scope. */
+   Loaded by index.html; the scripts share one global scope.
+   co-authors: jtxt.org and claude opus 5.5 */
 "use strict";
 
 // =============================================================
