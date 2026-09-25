@@ -10,22 +10,26 @@
 //   D, the drawing at up to DRAW_SIDE.
 // The placement P = {scale, theta, tx, ty} maps D onto R: r = scale·rot(theta)·d + t.
 // Scaling is always even, so the drawing's own proportions are never stretched away.
-var LINE_PX = 2, HALO_PX = 1.4;                        // CSS px on screen
+// The line, in CSS px on screen: an outline (a line with a white halo), a
+// thinner hairline with no halo, or none.
+var LINES = { outline:{ w:1.6, halo:1.2, label:'Outline' }, hairline:{ w:1, halo:0, label:'Hairline' }, off:{ w:0, halo:0, label:'No line' } };
+var LINE_ORDER = ['outline', 'hairline', 'off'];
 var INK_NEUTRAL = [0.08, 0.08, 0.09], INK_COLOR = [0.10, 0.36, 1.0], HALO = [1, 1, 1];
 var REF_SIDE = 1600, DRAW_SIDE = 1600, FIELD_SIDE = 1024;
 var C = {
   rw:0, rh:0, refData:null,
   has:false, name:'', dw:0, dh:0, drawCanvas:null, drawData:null,
   field:null, fieldData:null,
-  P:null, auto:null, moved:false, box:null, anim:null,
+  P:null, auto:null, autoCost:null, moved:false, box:null, anim:null,
   frame:null, frameOn:true,
   // mix: Fade, 0 (outline only) to 100 (drawing only). squint: show the reference
   // with Reference Squint's look. color: a blue line instead of the neutral one.
-  mix:Number(load('mix', 0)), squint:false, color:load('lineColor', '0') === '1', move:'drawing',
+  mix:Number(load('mix', 0)), squint:false, color:load('lineColor', '0') === '1', line:load('line', 'outline'), move:'drawing',
   matching:false, job:0, linesJob:0, status:'', statusBtn:null, lastRange:30,
   hoverOn:false, hoverPt:null
 };
 if(!(C.mix >= 0 && C.mix <= 100)) C.mix = 0;
+if(!LINES[C.line]) C.line = 'outline';
 
 function copyP(P){ return { scale:P.scale, theta:P.theta, tx:P.tx, ty:P.ty }; }
 function applyP(P, x, y){
@@ -91,7 +95,7 @@ function drawCheck(target, w, h, o){
   gl.uniform1f(CU.u_mode, o.mode || 0);
   gl.uniform1f(CU.u_mix, hasD ? (o.mix || 0) : 0);
   gl.uniform1f(CU.u_hasDraw, hasD ? 1 : 0);
-  var lineOn = !!(hasD && C.field && o.showLine);
+  var lineOn = !!(hasD && C.field && o.showLine && C.line !== 'off');
   gl.uniform1f(CU.u_hasLine, lineOn ? 1 : 0);
   // Widths arrive in output pixels; the field measures in its own texels.
   var maxD = C.field ? C.field.maxD : 40;
@@ -119,9 +123,9 @@ function syncCheck(){
   var on = hasImage, d = on && C.has;
   pressed([$('showSquint')], function(){ return C.squint; });
   pressed([$('showColor')], function(){ return C.color; });
-  pressed([$('showGrid')], function(){ return S.grid > 0; });
-  $('showGrid').textContent = S.grid ? S.grid + '×' + S.grid : 'Grid';
-  ['showSquint', 'showColor', 'showGrid'].forEach(function(id){ $(id).disabled = !on; });
+  pressed([$('showLine')], function(){ return C.line !== 'off'; });
+  $('showLine').textContent = LINES[C.line].label;
+  ['showSquint', 'showColor', 'showLine'].forEach(function(id){ $(id).disabled = !on; });
   fade.value = C.mix;
   fade.disabled = !d;
   fade.style.setProperty('--p', C.mix + '%');
@@ -130,10 +134,9 @@ function syncCheck(){
   pressed(document.querySelectorAll('#moveSeg button'), function(b){ return b.dataset.v === C.move; });
   ctools.open.disabled = !on;
   ctools.match.disabled = !d || C.matching;
-  ctools.reset.disabled = !d || !C.auto || !C.moved;
   ctools.frame.disabled = !d;
   ctools.frame.classList.toggle('on', d && C.frameOn);
-  ['rotate','mirror','peek'].forEach(function(k){ ctools[k].disabled = !on; });
+  ['grid','rotate','mirror','peek'].forEach(function(k){ ctools[k].disabled = !on; });
   ctools.save.disabled = !d;
   if(!d && !C.matching) setStatus(on ? 'Add a photo of your drawing to check it.' : 'Open a reference first.');
   stage.style.cursor = (MODE === 'check' && d && C.move === 'drawing') ? 'move' : '';
@@ -148,7 +151,7 @@ function paintCheck(){
   // Peek (comparing) shows the reference alone: no outline, no drawing.
   drawCheck(null, w, h, {
     toRef:M, mode:0, refTex:checkRefTex(), mix:comparing ? 0 : C.mix/100, showLine:!comparing, frameOn:C.frameOn,
-    pxPerR:pxPerR(w, h), widthPx:LINE_PX*dpr, haloPx:HALO_PX*dpr
+    pxPerR:pxPerR(w, h), widthPx:LINES[C.line].w*dpr, haloPx:LINES[C.line].halo*dpr
   });
   drawOverlay(M);
 }
@@ -369,7 +372,15 @@ function onWorker(e){
     syncUI(); return;
   }
   if(m.box) C.box = m.box;
-  C.auto = copyP(m.P); C.moved = false;
+  // Match after moving by hand snaps to the nearest fit. If that fits clearly worse
+  // than the automatic match (the drawing was moved far off), go back to the match.
+  if(m.type === 'refine' && C.auto && C.autoCost != null && m.cost > C.autoCost*1.15){
+    C.moved = false;
+    animateTo(C.auto);
+    setStatus('Back to the automatic match: it fits better than the nearest fit from there.');
+    syncUI(); return;
+  }
+  C.auto = copyP(m.P); C.autoCost = m.cost; C.moved = false;
   if(m.type === 'match' || !C.frame) suggestFrame(m.P);
   animateTo(m.P);
   var msg = m.type === 'refine' ? 'Snapped to the nearest fit.' : 'Lined up in ' + (m.timeMs/1000).toFixed(1) + ' s.';
@@ -393,7 +404,7 @@ statusBtn.addEventListener('click', function(){
 });
 function afterHandMove(){
   if(C.matching) return;
-  setStatus('Moved by hand. Match snaps it to the nearest fit; Reset goes back.');
+  setStatus('Moved by hand. Match snaps it to the nearest fit.');
   syncUI();
 }
 
@@ -462,7 +473,11 @@ $('showSquint').addEventListener('click', function(){
 $('showColor').addEventListener('click', function(){
   C.color = !C.color; store('lineColor', C.color ? '1' : '0'); syncUI(); paint();
 });
-$('showGrid').addEventListener('click', cycleGrid);
+function cycleLine(){
+  C.line = LINE_ORDER[(LINE_ORDER.indexOf(C.line) + 1) % LINE_ORDER.length];
+  store('line', C.line); syncUI(); paint();
+}
+$('showLine').addEventListener('click', cycleLine);
 fade.addEventListener('input', function(){ C.mix = Number(fade.value); store('mix', C.mix); syncUI(); paint(); });
 Array.prototype.forEach.call(document.querySelectorAll('#moveSeg button'), function(b){
   b.addEventListener('click', function(){ C.move = b.dataset.v; syncUI(); paint(); });
@@ -472,17 +487,12 @@ ctools.match.addEventListener('click', function(){
   if(!C.has) return;
   if(C.moved && C.auto) startMatch('refine'); else startMatch('match', C.lastRange);
 });
-ctools.reset.addEventListener('click', function(){
-  if(!C.auto) return;
-  animateTo(C.auto); C.moved = false;
-  setStatus('Back to the match.');
-  syncUI();
-});
 ctools.frame.addEventListener('click', function(){
   C.frameOn = !C.frameOn;
   if(C.frameOn && !C.frame && C.P) suggestFrame(C.P);
   syncUI(); paint();
 });
+ctools.grid.addEventListener('click', cycleGrid);
 ctools.rotate.addEventListener('click', function(){ rotate(1); });
 ctools.mirror.addEventListener('click', toggleMirror);
 ctools.save.addEventListener('click', openSave);
@@ -518,7 +528,7 @@ function exportCheck(kind){
   var grow = Math.max(1, Math.max(w, h)/800);
   function opts(mode){
     return { toRef:M, mode:mode, refTex:checkRefTex(), mix:C.mix/100, showLine:true, frameOn:false,
-             pxPerR:k, widthPx:LINE_PX*grow, haloPx:HALO_PX*grow, bg:[1,1,1] };
+             pxPerR:k, widthPx:LINES[C.line].w*grow, haloPx:LINES[C.line].halo*grow, bg:[1,1,1] };
   }
   var cv;
   if(kind === 'overlay') cv = renderCheck(w, h, opts(0));

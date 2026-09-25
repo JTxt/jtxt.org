@@ -177,6 +177,9 @@ function syncUI(){
   [tools.mirror, ctools.mirror].forEach(function(t){
     t.classList.toggle('on', S.mirror); t.setAttribute('aria-pressed', String(S.mirror));
   });
+  // Grid too: one grid, shown on both tabs.
+  Array.prototype.forEach.call(document.querySelectorAll('.gridName'), function(n){ n.textContent = S.grid ? S.grid + '×' + S.grid : 'Grid'; });
+  [tools.grid, ctools.grid].forEach(function(t){ t.classList.toggle('on', S.grid > 0); });
   syncSquint();
   syncCheck();
 }

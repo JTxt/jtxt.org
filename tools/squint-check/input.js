@@ -296,6 +296,7 @@ window.addEventListener('keydown', function(e){
       case 'o': drawInput.click(); break;
       case 's': openSave(); break;
       case 'g': cycleGrid(); break;
+      case 'l': cycleLine(); break;
       case '[': if(C.has && C.P){ stopAnim(); transformAbout(boxCenterR(), 1, -0.5*Math.PI/180, 0, 0); C.moved = true; paint(); afterHandMove(); } break;
       case ']': if(C.has && C.P){ stopAnim(); transformAbout(boxCenterR(), 1, 0.5*Math.PI/180, 0, 0); C.moved = true; paint(); afterHandMove(); } break;
       case 'arrowleft': case 'arrowright': case 'arrowup': case 'arrowdown':

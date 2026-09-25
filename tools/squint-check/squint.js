@@ -289,8 +289,6 @@ function syncSquint(){
   Object.keys(tools).forEach(function(k){ if(k !== 'open') tools[k].disabled = !on; });
   $('colorName').textContent = COLOR_NAMES[S.color];
   tools.color.classList.toggle('on', S.color !== 'full');
-  $('gridName').textContent = S.grid ? S.grid + '×' + S.grid : 'Grid';
-  tools.grid.classList.toggle('on', S.grid > 0);
   tools.looks.classList.toggle('on', looksOpen);
 
   pressed(document.querySelectorAll('#surroundSeg button'), function(b){ return b.dataset.v === S.surround; });

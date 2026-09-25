@@ -33,7 +33,7 @@ self.onmessage = function (e) {
         type: m.type, id: m.id, timeMs: Date.now() - t0,
         error: r.error || null,
         P: r.error ? null : { scale: r.scale, theta: r.theta, tx: r.tx, ty: r.ty },
-        quality: r.quality, ambiguity: r.ambiguity || 0,
+        quality: r.quality, ambiguity: r.ambiguity || 0, cost: r.cost,
         box: prep.boxB ? { x0: prep.boxB.x0, y0: prep.boxB.y0, x1: prep.boxB.x1, y1: prep.boxB.y1 } : null
       });
     }

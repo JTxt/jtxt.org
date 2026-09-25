@@ -79,7 +79,7 @@
         </button>
         <button class="tool" type="button" data-t="grid">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17" opacity=".7"/></svg>
-          <span id="gridName">Grid</span>
+          <span class="gridName">Grid</span>
         </button>
         <button class="tool" type="button" data-t="rotate">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7.5" width="13" height="13" rx="1.6"/><path d="M20.5 12a8 8 0 0 0-8-8"/><path d="M9.5 4.2L12.6 4l-.2 3.1"/></svg>
@@ -143,13 +143,13 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="11" height="11" rx="1.5" opacity=".55"/><rect x="9.5" y="9.5" width="11" height="11" rx="1.5"/><path d="M6.5 17.5l2.5-2.5M15 6.5l2.5 2.5" /></svg>
           <span>Match</span>
         </button>
-        <button class="tool" type="button" data-c="reset">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"/><path d="M4.6 14a8 8 0 1 0 2-8.5L4 10"/></svg>
-          <span>Reset</span>
-        </button>
         <button class="tool" type="button" data-c="frame">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5v15h15"/><path d="M2.5 6.5h15v15"/></svg>
           <span>Frame</span>
+        </button>
+        <button class="tool" type="button" data-c="grid">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17" opacity=".7"/></svg>
+          <span class="gridName">Grid</span>
         </button>
         <button class="tool" type="button" data-c="rotate">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7.5" width="13" height="13" rx="1.6"/><path d="M20.5 12a8 8 0 0 0-8-8"/><path d="M9.5 4.2L12.6 4l-.2 3.1"/></svg>
@@ -159,7 +159,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18" stroke-dasharray="2.5 3"/><path d="M9 7.5L4.5 12 9 16.5z" fill="currentColor"/><path d="M15 7.5L19.5 12 15 16.5z"/></svg>
           <span>Mirror</span>
         </button>
-        <button class="tool hold" type="button" data-c="peek" aria-label="Hold to hide the outline">
+        <button class="tool hold" type="button" data-c="peek" aria-label="Hold to see the reference alone">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>
           <span>Peek</span>
         </button>
@@ -175,7 +175,7 @@
           <div class="chips" id="showChips" role="group" aria-labelledby="showLbl">
             <button class="chip" type="button" id="showSquint" title="Show the reference the way Reference Squint does">Squint</button>
             <button class="chip" type="button" id="showColor" title="A blue outline instead of the neutral one">Color</button>
-            <button class="chip" type="button" id="showGrid" title="A grid over the reference: 3×3, 4×4 or 6×6">Grid</button>
+            <button class="chip" type="button" id="showLine" title="The line: outline, a thinner hairline, or none">Outline</button>
           </div>
         </div>
 
