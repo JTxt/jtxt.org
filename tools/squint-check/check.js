@@ -10,11 +10,19 @@
 //   D, the drawing at up to DRAW_SIDE.
 // The placement P = {scale, theta, tx, ty} maps D onto R: r = scale·rot(theta)·d + t.
 // Scaling is always even, so the drawing's own proportions are never stretched away.
-// The line, in CSS px on screen: an outline (a line with a white halo), a
-// thinner hairline with no halo, or none.
-var LINES = { outline:{ w:1.6, halo:1.2, label:'Outline' }, hairline:{ w:1, halo:0, label:'Hairline' }, off:{ w:0, halo:0, label:'No line' } };
-var LINE_ORDER = ['outline', 'hairline', 'off'];
-var INK_NEUTRAL = [0.08, 0.08, 0.09], INK_COLOR = [0.10, 0.36, 1.0], HALO = [1, 1, 1];
+// How the drawing shows over the reference. Widths in CSS px on screen.
+//   style 0: a line along the thinned marks (Outline has a white halo, Hairline none)
+//   style 1: Soft, the marks themselves with a smooth edge
+//   style 2: Tint, the marks with no cutoff, as the old Drawing matcher showed them
+var LINES = {
+  outline:{ style:0, w:1.6, halo:1.2, label:'Outline' },
+  soft:{ style:1, w:0, halo:0, label:'Soft' },
+  tint:{ style:2, w:0, halo:0, label:'Tint' },
+  hairline:{ style:0, w:1, halo:0, label:'Hairline' },
+  off:{ style:0, w:0, halo:0, label:'No line' }
+};
+var LINE_ORDER = ['outline', 'soft', 'tint', 'hairline', 'off'];
+var INK_NEUTRAL = [0.08, 0.08, 0.09], INK_COLOR = [0.21, 0.38, 0.83], HALO = [1, 1, 1];
 var REF_SIDE = 1600, DRAW_SIDE = 1600, FIELD_SIDE = 1024;
 var C = {
   rw:0, rh:0, refData:null,
@@ -24,7 +32,7 @@ var C = {
   frame:null, frameOn:true,
   // mix: Fade, 0 (outline only) to 100 (drawing only). squint: show the reference
   // with Reference Squint's look. color: a blue line instead of the neutral one.
-  mix:Number(load('mix', 0)), squint:false, color:load('lineColor', '0') === '1', line:load('line', 'outline'), move:'drawing',
+  mix:Number(load('mix', 0)), squint:false, color:load('lineColor', '0') === '1', line:load('line', 'outline'), move:'view',
   matching:false, job:0, linesJob:0, status:'', statusBtn:null, lastRange:30,
   hoverOn:false, hoverPt:null
 };
@@ -97,6 +105,7 @@ function drawCheck(target, w, h, o){
   gl.uniform1f(CU.u_hasDraw, hasD ? 1 : 0);
   var lineOn = !!(hasD && C.field && o.showLine && C.line !== 'off');
   gl.uniform1f(CU.u_hasLine, lineOn ? 1 : 0);
+  gl.uniform1f(CU.u_style, LINES[C.line].style);
   // Widths arrive in output pixels; the field measures in its own texels.
   var maxD = C.field ? C.field.maxD : 40;
   var ppt = lineOn ? o.pxPerR * C.P.scale * (C.dw / C.field.w) : 1;
@@ -432,9 +441,7 @@ function uploadDraw(){
 }
 function uploadField(){
   gl.bindTexture(gl.TEXTURE_2D, lineTex);
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE_ALPHA, C.field.w, C.field.h, 0, gl.LUMINANCE_ALPHA, gl.UNSIGNED_BYTE, C.fieldData);
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, C.field.w, C.field.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, C.fieldData);
 }
 function loadDrawing(source, name){
   if(!hasImage){ toast('Open a reference first.'); return; }

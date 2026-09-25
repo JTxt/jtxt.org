@@ -51,7 +51,12 @@ var BIG = 1e20;
 // centre line is a tangle. Stored as the distance from every pixel to the nearest
 // line: the page draws the line wherever that distance is under the chosen width,
 // so it stays smooth at any zoom and any width.
-// Two bytes per pixel: distance (0..maxD mapped to 0..255) and the ink itself (for "As drawn").
+// Four bytes per pixel:
+//   R  distance to the nearest line, 0..maxD mapped to 0..255 (Outline, Hairline)
+//   G  the ink with no cutoff, as the old Drawing matcher tinted it: how much darker
+//      than the paper, ramping in from 0.05 over 0.35 (Tint)
+//   B  that ink blurred a little, so a soft edge drawn from it is smooth (Soft)
+//   A  255
 function lines(img, maxSide) {
   var W = img.width, H = img.height, src = img.data;
   var k = Math.min(1, maxSide / Math.max(W, H));
@@ -90,9 +95,16 @@ function lines(img, maxSide) {
     if (mc >= minPix) { for (var j = 0; j < mc; j++) { mask[members[j]] = 1; } }
   }
 
-  var inkCount = 0;
-  var out = new Uint8Array(n * 2);
-  for (i = 0; i < n; i++) { if (mask[i]) { inkCount++; out[i * 2 + 1] = Math.round(ink[i] * 255); } }
+  var inkCount = 0, out = new Uint8Array(n * 4), soft = new Float32Array(n);
+  for (i = 0; i < n; i++) {
+    if (mask[i]) { inkCount++; }
+    var t = (bg[i] - L[i] - 0.05) / 0.35;
+    soft[i] = t < 0 ? 0 : (t > 1 ? 1 : t);
+    out[i * 4 + 1] = Math.round(soft[i] * 255);
+    out[i * 4 + 3] = 255;
+  }
+  soft = blur(soft, w, h, 1.0);
+  for (i = 0; i < n; i++) { out[i * 4 + 2] = Math.round(Math.min(1, soft[i]) * 255); }
 
   // Tiny gaps inside shading would thin into knots of loops; fill them first.
   // The limit is small (about 8 px across) so real small circles, like an eye, survive.
@@ -145,7 +157,7 @@ function lines(img, maxSide) {
   if (lineCount) { edt2d(f, w, h); }
   for (i = 0; i < n; i++) {
     var d = lineCount ? Math.sqrt(f[i]) : maxD;
-    out[i * 2] = d >= maxD ? 255 : Math.round(d / maxD * 255);
+    out[i * 4] = d >= maxD ? 255 : Math.round(d / maxD * 255);
   }
   return { w: w, h: h, maxD: maxD, data: out, ink: inkCount, lines: lineCount };
 }
@@ -199,6 +211,29 @@ function paper(L, w, h) {
       var gx = Math.max(0, Math.min(gw - 1, (x + 0.5) / bs - 0.5)), x0 = Math.floor(gx), x1 = Math.min(gw - 1, x0 + 1), fx = gx - x0;
       out[y * w + x] = (g2[y0 * gw + x0] * (1 - fx) + g2[y0 * gw + x1] * fx) * (1 - fy) +
                        (g2[y1 * gw + x0] * (1 - fx) + g2[y1 * gw + x1] * fx) * fy;
+    }
+  }
+  return out;
+}
+
+// Separable Gaussian blur.
+function blur(src, w, h, sigma) {
+  var r = Math.ceil(sigma * 3), k = new Float32Array(2 * r + 1), s = 0, i, x, y;
+  for (i = -r; i <= r; i++) { k[i + r] = Math.exp(-i * i / (2 * sigma * sigma)); s += k[i + r]; }
+  for (i = 0; i < k.length; i++) { k[i] /= s; }
+  var tmp = new Float32Array(w * h), out = new Float32Array(w * h);
+  for (y = 0; y < h; y++) {
+    for (x = 0; x < w; x++) {
+      var acc = 0;
+      for (i = -r; i <= r; i++) { var xx = x + i < 0 ? 0 : (x + i >= w ? w - 1 : x + i); acc += k[i + r] * src[y * w + xx]; }
+      tmp[y * w + x] = acc;
+    }
+  }
+  for (y = 0; y < h; y++) {
+    for (x = 0; x < w; x++) {
+      var acc2 = 0;
+      for (i = -r; i <= r; i++) { var yy = y + i < 0 ? 0 : (y + i >= h ? h - 1 : y + i); acc2 += k[i + r] * tmp[yy * w + x]; }
+      out[y * w + x] = acc2;
     }
   }
   return out;
