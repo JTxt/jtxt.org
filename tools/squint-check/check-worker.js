@@ -7,6 +7,7 @@
  *   { type:'lines', id, maxSide }                      the drawing's lines as a distance field
  *   { type:'match', id, rotationRange }                full search
  *   { type:'refine', id, P }                           snap from a placement {scale, theta, tx, ty}
+ *   { type:'edges', id, which, maxSide }               'ref' or 'draw': the matcher's edges as a distance field
  * Every reply carries the same type and id, plus `error` if it failed.
  */
 importScripts('match.js');
@@ -22,6 +23,12 @@ self.onmessage = function (e) {
       if (!drawImg) { throw new Error('No drawing yet'); }
       var f = lines(drawImg, m.maxSide || 1024);
       self.postMessage({ type: 'lines', id: m.id, field: f }, [f.data.buffer]);
+    }
+    else if (m.type === 'edges') {
+      var img = m.which === 'ref' ? refImg : drawImg;
+      if (!img) { throw new Error('No picture yet'); }
+      var ef = edgeField(img, m.maxSide || 1024);
+      self.postMessage({ type: 'edges', id: m.id, which: m.which, field: ef }, [ef.data.buffer]);
     }
     else if (m.type === 'match' || m.type === 'refine') {
       if (!refImg || !drawImg) { throw new Error('Add both a reference and a drawing first'); }
@@ -160,6 +167,67 @@ function lines(img, maxSide) {
     out[i * 4] = d >= maxD ? 255 : Math.round(d / maxD * 255);
   }
   return { w: w, h: h, maxD: maxD, data: out, ink: inkCount, lines: lineCount };
+}
+
+/* ------------------------------------------------------------------ edges */
+
+// The Edges view, like the old Drawing matcher's: the matcher's own edge finder
+// (blur, gradient, one-pixel ridges, faint and short pieces dropped), run on a
+// finer copy than its 480px working size. The blur scales with the size so the
+// edges keep the old view's structure, only placed more precisely.
+// Four bytes per pixel: R, distance to the nearest edge (0..maxD mapped to 0..255);
+// G, that edge's weight (strong and long edges near 1); B unused; A 255.
+function edgeField(img, maxSide) {
+  var W = img.width, H = img.height, k = Math.min(1, maxSide / Math.max(W, H));
+  var w = Math.max(8, Math.round(W * k)), h = Math.max(8, Math.round(H * k)), n = w * h, i;
+  var L = luminance(img.data, W, H, w, h);
+  var o = {}, key;
+  for (key in ImageMatch.DEFAULTS) { o[key] = ImageMatch.DEFAULTS[key]; }
+  var E = ImageMatch.detectEdges(L, w, h, 1.4 * Math.max(w, h) / 480 * 0.85, o);
+  var f = new Float64Array(n), wt = new Float32Array(n);
+  for (i = 0; i < n; i++) { f[i] = BIG; }
+  for (i = 0; i < E.n; i++) { var p = (E.y[i] | 0) * w + (E.x[i] | 0); f[p] = 0; wt[p] = Math.max(wt[p], E.wt[i]); }
+  var near = new Int32Array(n), maxD = 32, out = new Uint8Array(n * 4);
+  if (E.n) { edt2dArg(f, near, w, h); }
+  for (i = 0; i < n; i++) {
+    var d = E.n ? Math.sqrt(f[i]) : maxD;
+    out[i * 4] = d >= maxD ? 255 : Math.round(d / maxD * 255);
+    out[i * 4 + 1] = E.n ? Math.round(wt[near[i]] * 255) : 0;
+    out[i * 4 + 3] = 255;
+  }
+  return { w: w, h: h, maxD: maxD, data: out, edges: E.n };
+}
+
+// The distance transform again, also recording which edge pixel is nearest,
+// so every pixel near a line knows how strong that line is.
+function edt2dArg(f, near, w, h) {
+  var n = Math.max(w, h), col = new Float64Array(n), d = new Float64Array(n), arg = new Int32Array(n);
+  var v = new Int32Array(n), z = new Float64Array(n + 1), rowOf = new Int32Array(w * h), x, y;
+  for (x = 0; x < w; x++) {
+    for (y = 0; y < h; y++) { col[y] = f[y * w + x]; }
+    edt1dArg(col, h, d, arg, v, z);
+    for (y = 0; y < h; y++) { f[y * w + x] = d[y]; rowOf[y * w + x] = arg[y]; }
+  }
+  for (y = 0; y < h; y++) {
+    for (x = 0; x < w; x++) { col[x] = f[y * w + x]; }
+    edt1dArg(col, w, d, arg, v, z);
+    for (x = 0; x < w; x++) { f[y * w + x] = d[x]; near[y * w + x] = rowOf[y * w + arg[x]] * w + arg[x]; }
+  }
+}
+function edt1dArg(f, n, d, arg, v, z) {
+  var k = 0, q, s;
+  v[0] = 0; z[0] = -BIG; z[1] = BIG;
+  for (q = 1; q < n; q++) {
+    s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    while (s <= z[k]) { k--; s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); }
+    k++; v[k] = q; z[k] = s; z[k + 1] = BIG;
+  }
+  k = 0;
+  for (q = 0; q < n; q++) {
+    while (z[k + 1] < q) { k++; }
+    var dq = q - v[k];
+    d[q] = dq * dq + f[v[k]]; arg[q] = v[k];
+  }
 }
 
 // Area-averaged luminance at the working size. Transparent pixels read as white paper.

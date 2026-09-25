@@ -7,7 +7,7 @@
 // =============================================================
 var gl = null, glLost = false;
 var mainProg, boxProg, gaussProg, checkProg, U = {}, BU = {}, GU = {}, CU = {};
-var mainA, boxA, gaussA, checkA, quad, texture, drawTex, lineTex, fboA = null, fboB = null;
+var mainA, boxA, gaussA, checkA, quad, texture, drawTex, lineTex, refEdgeTex, drawEdgeTex, fboA = null, fboB = null;
 var texW = 0, texH = 0, levels = [];
 var imgW = 0, imgH = 0, hasImage = false, lastPrepared = null, lastName = '';
 
@@ -61,12 +61,13 @@ function initGL(){
   BU = uniforms(boxProg, ['u_src','u_texel','u_region','u_srcMax','u_off']);
   GU = uniforms(gaussProg, ['u_src','u_texel','u_region','u_srcMax','u_dir','u_radius']);
   CU = uniforms(checkProg, ['u_ref','u_draw','u_line','u_toRef','u_refToDraw','u_bg','u_mode','u_mix',
-    'u_hasDraw','u_hasLine','u_style','u_w','u_halo','u_aa','u_maxD','u_ink','u_haloC','u_frame','u_frameOn','u_grid','u_gridPx']);
+    'u_hasDraw','u_hasLine','u_style','u_w','u_halo','u_aa','u_maxD','u_ink','u_haloC','u_frame','u_frameOn','u_grid','u_gridPx',
+    'u_refEdge','u_drawEdge','u_edges','u_rHas','u_eMaxD','u_rW','u_dW','u_eBg','u_eRef','u_eDraw']);
   quad = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, quad);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
   texture = makeTex();
-  drawTex = blankTex(); lineTex = blankTex();
+  drawTex = blankTex(); lineTex = blankTex(); refEdgeTex = blankTex(); drawEdgeTex = blankTex();
   return true;
 }
 

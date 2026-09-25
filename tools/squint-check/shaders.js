@@ -104,8 +104,10 @@ var MAIN_FRAG = [
 // Drawing Check: the reference (plain, or squinted by the Squint pipeline), with
 // the drawing's lines drawn from a distance field (distance to the nearest line,
 // per texel), so they stay smooth at any zoom. Fade (u_mix) brings the drawing
-// photo in over the reference as the outline goes out. Mode 1 draws the drawing
-// photo alone and mode 2 the reference alone, both for the side-by-side save.
+// photo in over the reference as the outline goes out. Edges (u_edges) replaces the
+// reference with its own edges on a plain background, and the drawing with its edges,
+// each drawn with a thin core and a soft bloom. Mode 1 draws the drawing photo alone
+// and mode 2 the reference alone, both for the side-by-side save.
 var CHECK_FRAG = [
   'precision highp float;',
   'varying vec2 v_uv;',
@@ -117,6 +119,9 @@ var CHECK_FRAG = [
   'uniform vec3 u_ink; uniform vec3 u_haloC;',
   'uniform vec4 u_frame; uniform float u_frameOn;',
   'uniform float u_grid; uniform vec2 u_gridPx;',
+  'uniform sampler2D u_refEdge; uniform sampler2D u_drawEdge;',
+  'uniform float u_edges; uniform float u_rHas; uniform float u_eMaxD;',
+  'uniform vec3 u_rW; uniform vec3 u_dW; uniform vec3 u_eBg; uniform vec3 u_eRef; uniform vec3 u_eDraw;',
   'bool inside(vec2 p){ return p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0; }',
   // The same grid Squint draws: black on light passages, white on dark ones.
   'vec3 gridOver(vec3 c, vec2 r){',
@@ -125,6 +130,14 @@ var CHECK_FRAG = [
   '  float on = max(step(d.x, u_gridPx.x*0.8), step(d.y, u_gridPx.y*0.8));',
   '  float y = dot(c*c, vec3(0.2126, 0.7152, 0.0722));',
   '  return mix(c, y > 0.18 ? vec3(0.0) : vec3(1.0), on*0.7);',
+  '}',
+  // An edge from its field: t.x is the distance, t.y the edge's weight; wv is core, bloom
+  // and antialiasing width in texels. Stronger, longer edges show brighter, as in the old view.
+  'float edgeLine(vec2 t, vec3 wv, float base, float gain){',
+  '  float dist = t.x * u_eMaxD;',
+  '  float core = 1.0 - smoothstep(wv.x - wv.z, wv.x + wv.z, dist);',
+  '  float glow = exp(-(dist*dist) / max(wv.y*wv.y, 0.0001));',
+  '  return clamp((base + gain*t.y) * max(core, 0.5*glow), 0.0, 1.0);',
   '}',
   'void main(){',
   '  vec2 r = (u_toRef * vec3(v_uv, 1.0)).xy;',
@@ -136,9 +149,15 @@ var CHECK_FRAG = [
   '  }',
   '  vec3 c = inRef ? texture2D(u_ref, r).rgb : u_bg;',
   '  if(u_mode > 1.5){ gl_FragColor = vec4(inRef ? gridOver(c, r) : c, 1.0); return; }',
+  '  bool edges = u_edges > 0.5;',
+  '  if(edges && inRef) c = u_eBg;',
   '  if(inDraw) c = mix(c, texture2D(u_draw, d).rgb, u_mix);',
   '  if(inRef) c = gridOver(c, r);',
-  '  if(u_hasLine > 0.5 && inDraw){',
+  '  if(edges){',
+  // The reference's edge field is stored top-down, the reference texture bottom-up.
+  '    if(inRef && u_rHas > 0.5) c = mix(c, u_eRef, edgeLine(texture2D(u_refEdge, vec2(r.x, 1.0 - r.y)).rg, u_rW, 0.25, 0.6));',
+  '    if(inDraw && u_hasLine > 0.5) c = mix(c, u_eDraw, edgeLine(texture2D(u_drawEdge, d).rg, u_dW, 0.3, 0.7) * (1.0 - u_mix));',
+  '  } else if(u_hasLine > 0.5 && inDraw){',
   '    vec4 t = texture2D(u_line, d); float a = 1.0 - u_mix;',
   '    if(u_style < 0.5){',
   '      float dist = t.r * u_maxD;',
@@ -152,7 +171,7 @@ var CHECK_FRAG = [
   '      c = mix(c, u_ink, t.g*0.85*a);',
   '    }',
   '  }',
-  '  if(u_frameOn > 0.5 && (r.x < u_frame.x || r.x > u_frame.z || r.y < u_frame.y || r.y > u_frame.w)) c = mix(c, u_bg, 0.6);',
+  '  if(u_frameOn > 0.5 && (r.x < u_frame.x || r.x > u_frame.z || r.y < u_frame.y || r.y > u_frame.w)) c = mix(c, edges ? u_eBg : u_bg, 0.6);',
   '  gl_FragColor = vec4(c, 1.0);',
   '}'
 ].join('\n');

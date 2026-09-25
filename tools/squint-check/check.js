@@ -19,9 +19,13 @@ var LINES = {
   soft:{ style:1, w:0, halo:0, label:'Soft' },
   tint:{ style:2, w:0, halo:0, label:'Tint' },
   hairline:{ style:0, w:1, halo:0, label:'Hairline' },
-  off:{ style:0, w:0, halo:0, label:'No line' }
+  off:{ style:0, w:0, halo:0, label:'No line' },
+  edges:{ style:3, w:0, halo:0, label:'Edges' }
 };
-var LINE_ORDER = ['outline', 'soft', 'tint', 'hairline', 'off'];
+var LINE_ORDER = ['outline', 'edges', 'soft', 'tint', 'hairline', 'off'];
+// Edges: both pictures as the matcher's edges, like the old Drawing matcher's Edges
+// view, found on a 1024px copy and drawn with a thin core and a soft bloom (CSS px).
+var EDGE = { side:1024, core:0.6, bloom:1.1 };
 var INK_NEUTRAL = [0.08, 0.08, 0.09], INK_COLOR = [0.21, 0.38, 0.83], HALO = [1, 1, 1];
 var REF_SIDE = 1600, DRAW_SIDE = 1600, FIELD_SIDE = 1024;
 var C = {
@@ -29,6 +33,7 @@ var C = {
   has:false, name:'', dw:0, dh:0, drawCanvas:null, drawData:null,
   field:null, fieldData:null,
   P:null, auto:null, autoCost:null, moved:false, box:null, anim:null,
+  refEdge:null, refEdgeData:null, drawEdge:null, drawEdgeData:null, edgeJobs:{ ref:0, draw:0 },
   frame:null, frameOn:true,
   // mix: Fade, 0 (outline only) to 100 (drawing only). squint: show the reference
   // with Reference Squint's look. color: a blue line instead of the neutral one.
@@ -94,7 +99,11 @@ function drawCheck(target, w, h, o){
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, drawTex);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, lineTex);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, o.refTex || texture);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, refEdgeTex);
+  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, drawEdgeTex);
+  gl.activeTexture(gl.TEXTURE0);
   gl.uniform1i(CU.u_ref, 0); gl.uniform1i(CU.u_draw, 1); gl.uniform1i(CU.u_line, 2);
+  gl.uniform1i(CU.u_refEdge, 3); gl.uniform1i(CU.u_drawEdge, 4);
   gl.uniformMatrix3fv(CU.u_toRef, false, m3gl(o.toRef));
   var hasD = C.has && C.P;
   gl.uniformMatrix3fv(CU.u_refToDraw, false, m3gl(hasD ? refToDraw(C.P) : IDENT));
@@ -103,7 +112,8 @@ function drawCheck(target, w, h, o){
   gl.uniform1f(CU.u_mode, o.mode || 0);
   gl.uniform1f(CU.u_mix, hasD ? (o.mix || 0) : 0);
   gl.uniform1f(CU.u_hasDraw, hasD ? 1 : 0);
-  var lineOn = !!(hasD && C.field && o.showLine && C.line !== 'off');
+  var edges = C.line === 'edges';
+  var lineOn = !!(hasD && o.showLine && (edges ? C.drawEdge : C.field && C.line !== 'off'));
   gl.uniform1f(CU.u_hasLine, lineOn ? 1 : 0);
   gl.uniform1f(CU.u_style, LINES[C.line].style);
   // Widths arrive in output pixels; the field measures in its own texels.
@@ -120,6 +130,20 @@ function drawCheck(target, w, h, o){
   if(f) gl.uniform4f(CU.u_frame, f.x0/C.rw, 1 - f.y1/C.rh, f.x1/C.rw, 1 - f.y0/C.rh);
   else gl.uniform4f(CU.u_frame, 0, 0, 1, 1);
   gl.uniform1f(CU.u_frameOn, f ? 1 : 0);
+  gl.uniform1f(CU.u_edges, edges ? 1 : 0);
+  if(edges){
+    var ec = edgeColors();
+    gl.uniform3f(CU.u_eBg, ec.bg[0], ec.bg[1], ec.bg[2]);
+    gl.uniform3f(CU.u_eRef, ec.ref[0], ec.ref[1], ec.ref[2]);
+    gl.uniform3f(CU.u_eDraw, ec.draw[0], ec.draw[1], ec.draw[2]);
+    gl.uniform1f(CU.u_eMaxD, 32);
+    // Core, bloom and antialiasing widths, each in its own field's texels. Zoomed in, the core
+    // keeps at least 3/4 of a texel so the gap between diagonal edge pixels stays bridged.
+    var wv = function(ppt){ return [Math.max(0.75, EDGE.core*o.unit/ppt), Math.max(0.9, EDGE.bloom*o.unit/ppt), Math.max(0.05, 0.8/ppt)]; };
+    var rw = wv(C.refEdge ? o.pxPerR*C.rw/C.refEdge.w : 1), dw = wv(C.drawEdge && hasD ? o.pxPerR*C.P.scale*C.dw/C.drawEdge.w : 1);
+    gl.uniform3f(CU.u_rW, rw[0], rw[1], rw[2]); gl.uniform3f(CU.u_dW, dw[0], dw[1], dw[2]);
+    gl.uniform1f(CU.u_rHas, C.refEdge ? 1 : 0);
+  }
   // Grid lines one output pixel wide, measured in reference uv.
   gl.uniform1f(CU.u_grid, S.grid || 0);
   gl.uniform2f(CU.u_gridPx, 1/(o.pxPerR*C.rw), 1/(o.pxPerR*C.rh));
@@ -135,6 +159,7 @@ function syncCheck(){
   pressed([$('showLine')], function(){ return C.line !== 'off'; });
   $('showLine').textContent = LINES[C.line].label;
   ['showSquint', 'showColor', 'showLine'].forEach(function(id){ $(id).disabled = !on; });
+  if(C.line === 'edges') $('showColor').disabled = true;
   fade.value = C.mix;
   fade.disabled = !d;
   fade.style.setProperty('--p', C.mix + '%');
@@ -160,7 +185,7 @@ function paintCheck(){
   // Peek (comparing) shows the reference alone: no outline, no drawing.
   drawCheck(null, w, h, {
     toRef:M, mode:0, refTex:checkRefTex(), mix:comparing ? 0 : C.mix/100, showLine:!comparing, frameOn:C.frameOn,
-    pxPerR:pxPerR(w, h), widthPx:LINES[C.line].w*dpr, haloPx:LINES[C.line].halo*dpr
+    pxPerR:pxPerR(w, h), unit:dpr, widthPx:LINES[C.line].w*dpr, haloPx:LINES[C.line].halo*dpr
   });
   drawOverlay(M);
 }
@@ -323,7 +348,7 @@ function getWorker(){
     worker.onmessage = onWorker;
     worker.onerror = function(ev){
       if(ev && ev.preventDefault) ev.preventDefault();
-      killWorker(); C.matching = false;
+      killWorker(); C.matching = false; C.edgeJobs = { ref:0, draw:0 };
       setStatus('The matcher stopped with an error. Line the drawing up by hand, or reload and try again.');
       syncUI();
     };
@@ -360,10 +385,46 @@ function cancelMatch(){
   killWorker(); C.matching = false; C.job = ++jobSeq;
   setStatus('Stopped. Drag the drawing into place, or tap Match to try again.');
   if(!C.field && C.has) requestLines();
+  C.edgeJobs = { ref:0, draw:0 }; needEdges();
   syncUI();
+}
+// The Edges view's fields are found only when it's in use, once per picture.
+function needEdges(){
+  if(C.line !== 'edges') return;
+  if(hasImage && !C.refEdge && !C.edgeJobs.ref) requestEdges('ref');
+  if(C.has && !C.drawEdge && !C.edgeJobs.draw) requestEdges('draw');
+}
+function requestEdges(which){
+  var w = getWorker();
+  if(!w) return;
+  ensureData(w);
+  C.edgeJobs[which] = ++jobSeq;
+  w.postMessage({ type:'edges', id:C.edgeJobs[which], which:which, maxSide:EDGE.side });
+}
+function uploadEdge(which){
+  var f = which === 'ref' ? C.refEdge : C.drawEdge;
+  gl.bindTexture(gl.TEXTURE_2D, which === 'ref' ? refEdgeTex : drawEdgeTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, f.w, f.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, which === 'ref' ? C.refEdgeData : C.drawEdgeData);
+}
+// The Edges view's colors follow the page's theme, like the old tool's.
+var edgeCols = null;
+function edgeColors(){
+  if(!edgeCols) edgeCols = { bg:hexRGB(cssVar('--edge-bg')), ref:hexRGB(cssVar('--edge-ref')), draw:hexRGB(cssVar('--edge-draw')) };
+  return edgeCols;
 }
 function onWorker(e){
   var m = e.data;
+  if(m.type === 'edges'){
+    if(m.id !== C.edgeJobs[m.which]) return;
+    C.edgeJobs[m.which] = 0;
+    if(m.error){ toast('Couldn’t find the edges.'); return; }
+    var meta = { w:m.field.w, h:m.field.h, maxD:m.field.maxD, edges:m.field.edges };
+    if(m.which === 'ref'){ C.refEdge = meta; C.refEdgeData = m.field.data; }
+    else { C.drawEdge = meta; C.drawEdgeData = m.field.data; }
+    uploadEdge(m.which);
+    paint();
+    return;
+  }
   if(m.type === 'lines'){
     if(m.id !== C.linesJob) return;
     if(m.error){ toast('Couldn’t find the lines in that photo.'); return; }
@@ -429,10 +490,12 @@ function setCheckReference(p){
   C.rw = w; C.rh = h; C.refData = { width:w, height:h, data:d.data };
   sent.ref = false;
   C.frame = null;
+  C.refEdge = null; C.refEdgeData = null; C.edgeJobs.ref = 0;
   if(C.has){
     C.P = guessPlacement(); C.auto = null; C.moved = false;
     startMatch('match');
   }
+  needEdges();
 }
 function uploadDraw(){
   gl.bindTexture(gl.TEXTURE_2D, drawTex);
@@ -458,11 +521,13 @@ function loadDrawing(source, name){
   sent.draw = false;
   uploadDraw();
   C.has = true; C.field = null; C.fieldData = null; C.auto = null; C.box = null; C.moved = false; C.frame = null; C.anim = null;
+  C.drawEdge = null; C.drawEdgeData = null; C.edgeJobs.draw = 0;
   C.P = guessPlacement();
   if(MODE !== 'check') setMode('check');
   syncEmpty(); syncUI();
   requestLines();
   startMatch('match');
+  needEdges();
   paint();
 }
 
@@ -482,7 +547,7 @@ $('showColor').addEventListener('click', function(){
 });
 function cycleLine(){
   C.line = LINE_ORDER[(LINE_ORDER.indexOf(C.line) + 1) % LINE_ORDER.length];
-  store('line', C.line); syncUI(); paint();
+  store('line', C.line); needEdges(); syncUI(); paint();
 }
 $('showLine').addEventListener('click', cycleLine);
 fade.addEventListener('input', function(){ C.mix = Number(fade.value); store('mix', C.mix); syncUI(); paint(); });
@@ -535,7 +600,7 @@ function exportCheck(kind){
   var grow = Math.max(1, Math.max(w, h)/800);
   function opts(mode){
     return { toRef:M, mode:mode, refTex:checkRefTex(), mix:C.mix/100, showLine:true, frameOn:false,
-             pxPerR:k, widthPx:LINES[C.line].w*grow, haloPx:LINES[C.line].halo*grow, bg:[1,1,1] };
+             pxPerR:k, unit:grow, widthPx:LINES[C.line].w*grow, haloPx:LINES[C.line].halo*grow, bg:[1,1,1] };
   }
   var cv;
   if(kind === 'overlay') cv = renderCheck(w, h, opts(0));
