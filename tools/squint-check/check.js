@@ -18,17 +18,51 @@
 //   style 3: Edges, both pictures as their edges on a plain background, like the old
 //            Drawing matcher's Edges view (reference gray, drawing blue)
 var LINES = {
-  outline:{ style:0, w:3, halo:1, label:'Outline' },
-  edges:{ style:3, w:2, halo:0, label:'Edges' },
-  soft:{ style:1, w:0, halo:0, label:'Soft' },
-  tint:{ style:2, w:0, halo:0, label:'Tint' },
-  off:{ style:0, w:0, halo:0, label:'No line' }
+  outline:{ style:0, label:'Outline' },
+  edges:{ style:3, label:'Edges' },
+  soft:{ style:1, label:'Soft' },
+  tint:{ style:2, label:'Tint' },
+  off:{ style:0, label:'No line' }
 };
 var LINE_ORDER = ['outline', 'edges', 'soft', 'tint', 'off'];
-// The lines come from an edge mask of each picture, found by the worker once when the
-// picture loads (at up to `side` px on its long side), blurred once on the GPU by
-// `sigma` texels, and thresholded every frame. A straight edge's blur peaks at `peak`.
-var MASK = { side:1024, sigma:1.2, peak:0.5 };
+// The lines come from a mask of each picture's edges and lines, found by the worker once
+// when the picture loads, blurred once on the GPU, and thresholded every frame. A straight
+// one-texel mark's blur peaks at MASK_PEAK, leaving room above it where marks crowd.
+var MASK_PEAK = 0.5;
+// The numbers behind the lines. debug.js (Looks → Debug) can change them while it's on.
+//   mask: the worker finds the mask again     blur: the GPU re-blurs it     paint: redraw only
+var TUNE = {
+  // mask. Sizes are in pixels of a 1024px copy.
+  edgeSide:1024,       // the mask's long side, px
+  edgeSigma:0.85,      // the edge finder's blur, as a share of the matcher's own (scaled to the size)
+  edgeThreshold:0.2,   // edges fainter than this share of a strong one are dropped
+  edgeMinLen:0.025,    // edge pieces shorter than this share of the long side are dropped
+  lines:1,             // find lines (thin strokes drawn along their centre) at all
+  lineSigmaMin:1,      // strokes about 2× these wide count fully as lines ...
+  lineSigmaMax:2.5,    // ... wider ones fade back to their outlines
+  lineLo:0.06,         // a line's contrast where it starts to count ...
+  lineHi:0.15,         // ... and where it counts fully (lower ones: photo texture turns to haze)
+  lineBeta:3,          // how firmly the side of a step edge is kept from counting as a line
+  lineMinLen:0.03,     // line pieces shorter than this share of the long side are dropped
+  lineReach:1,         // how far out a line's side edges fade (1: where the edge finder puts them)
+  lineAngle:4,         // how closely an edge must run along a line to fade with it
+  lightRef:0,          // light lines on dark count on the reference (on: a photo's texture adds many) ...
+  lightDraw:0,         // ... and on the drawing (off: gaps between pencil strokes would count)
+  // blur
+  blurSigma:1.2,       // the GPU blur, in mask texels
+  // paint. Widths in CSS px on screen.
+  outlineW:3, outlineHalo:1, haloAlpha:0.7, edgesW:2,
+  tMin:0.1, tMax:0.5,  // the threshold's range, as a share of the peak (see lineParams)
+  outlineBase:0.45,    // Outline: how bright the faintest mark is, next to the strongest
+  edgesBaseRef:0.3, edgesBaseDraw:0.35,   // the same in the Edges view
+  bloom:0.35           // the Edges view's glow
+};
+function maskOpts(){
+  var o = {};
+  ['edgeSigma','edgeThreshold','edgeMinLen','lines','lineSigmaMin','lineSigmaMax','lineLo','lineHi','lineBeta',
+   'lineMinLen','lineReach','lineAngle','lightRef','lightDraw'].forEach(function(k){ o[k] = TUNE[k]; });
+  return o;
+}
 var INK_NEUTRAL = [0.08, 0.08, 0.09], INK_COLOR = [0.21, 0.38, 0.83], HALO = [1, 1, 1];
 var REF_SIDE = 1600, DRAW_SIDE = 1600;
 var C = {
@@ -104,12 +138,12 @@ function cssPxPerR(){ return pxPerR(canvas.width, canvas.height) * stage.clientW
 // on a diagonal. So zoomed out, lines keep their width on screen; zoomed far in, they're
 // as thin as the mask allows and grow with the drawing.
 function lineParams(ppt, widthPx, haloPx){
-  var s = MASK.sigma, hw = widthPx/2/ppt;
-  var t = Math.min(0.5, Math.max(0.1, Math.exp(-hw*hw/(2*s*s))));
+  var s = TUNE.blurSigma, hw = widthPx/2/ppt;
+  var t = Math.min(TUNE.tMax, Math.max(TUNE.tMin, Math.exp(-hw*hw/(2*s*s))));
   var h = s*Math.sqrt(2*Math.log(1/t));
   var aa = Math.max(0.002, 0.75*t*h/(s*s*ppt));        // how much the blur changes over about a pixel there
   var hh = h + haloPx/ppt, th = Math.min(t, Math.max(0.03, Math.exp(-hh*hh/(2*s*s))));
-  return [t*MASK.peak, aa*MASK.peak, th*MASK.peak, 1/ppt];
+  return [t*MASK_PEAK, aa*MASK_PEAK, th*MASK_PEAK, 1/ppt];
 }
 function drawCheck(target, w, h, o){
   gl.bindFramebuffer(gl.FRAMEBUFFER, target);
@@ -136,17 +170,20 @@ function drawCheck(target, w, h, o){
   gl.uniform1f(CU.u_hasLine, lineOn ? 1 : 0);
   gl.uniform1f(CU.u_style, L.style);
   // Output pixels per mask texel, for the drawing (through its placement) and the reference.
-  var dl = lineOn ? lineParams(o.pxPerR*C.P.scale*C.dw/md.w, L.w*o.unit, L.halo*o.unit) : [1, 0, 1, 1];
+  var lw = (edges ? TUNE.edgesW : TUNE.outlineW)*o.unit, lh = edges ? 0 : TUNE.outlineHalo*o.unit;
+  var dl = lineOn ? lineParams(o.pxPerR*C.P.scale*C.dw/md.w, lw, lh) : [1, 0, 1, 1];
   gl.uniform4f(CU.u_dLine, dl[0], dl[1], dl[2], dl[3]);
   gl.uniform2f(CU.u_dTexel, md ? 1/md.w : 1, md ? 1/md.h : 1);
   var refOn = !!(edges && gr);
-  var rl = refOn ? lineParams(o.pxPerR*C.rw/mr.w, L.w*o.unit, 0) : [1, 0, 1, 1];
+  var rl = refOn ? lineParams(o.pxPerR*C.rw/mr.w, lw, 0) : [1, 0, 1, 1];
   gl.uniform4f(CU.u_rLine, rl[0], rl[1], rl[2], rl[3]);
   gl.uniform2f(CU.u_rTexel, mr ? 1/mr.w : 1, mr ? 1/mr.h : 1);
   gl.uniform1f(CU.u_rHas, refOn ? 1 : 0);
   var ink = C.color ? INK_COLOR : INK_NEUTRAL;
   gl.uniform3f(CU.u_ink, ink[0], ink[1], ink[2]);
   gl.uniform3f(CU.u_haloC, HALO[0], HALO[1], HALO[2]);
+  gl.uniform4f(CU.u_look, TUNE.outlineBase, TUNE.haloAlpha, TUNE.bloom, 0);
+  gl.uniform2f(CU.u_eBase, TUNE.edgesBaseRef, TUNE.edgesBaseDraw);
   var f = (o.frameOn && C.frame) ? C.frame : null;
   if(f) gl.uniform4f(CU.u_frame, f.x0/C.rw, 1 - f.y1/C.rh, f.x1/C.rw, 1 - f.y0/C.rh);
   else gl.uniform4f(CU.u_frame, 0, 0, 1, 1);
@@ -407,17 +444,29 @@ function requestMask(which){
   if(!w) return;
   ensureData(w);
   C.maskJobs[which] = ++jobSeq;
-  w.postMessage({ type:'mask', id:C.maskJobs[which], which:which, maxSide:MASK.side });
+  w.postMessage({ type:'mask', id:C.maskJobs[which], which:which, maxSide:TUNE.edgeSide, opts:maskOpts() });
 }
 function setMask(which, m){
   if(maskGL[which] && gl && !glLost) freeMask(maskGL[which]);
   maskGL[which] = null;
   C.mask[which] = m; C.maskJobs[which] = 0;
-  if(m && gl && !glLost) maskGL[which] = blurMask(m, MASK.sigma, MASK.peak);
+  if(m && gl && !glLost) maskGL[which] = blurMask(m, TUNE.blurSigma, MASK_PEAK);
 }
+// After TUNE changes: find both masks again (the old ones show until the new arrive) ...
+function refindMasks(){
+  C.maskJobs = { ref:0, draw:0 };
+  if(C.has) requestMask('draw');
+  if(hasImage) requestMask('ref');
+}
+// ... or only blur them again.
 // After the WebGL context comes back, the GPU copies are rebuilt from the kept masks.
 function remakeMasks(){
-  ['ref', 'draw'].forEach(function(k){ maskGL[k] = C.mask[k] ? blurMask(C.mask[k], MASK.sigma, MASK.peak) : null; });
+  ['ref', 'draw'].forEach(function(k){ maskGL[k] = C.mask[k] ? blurMask(C.mask[k], TUNE.blurSigma, MASK_PEAK) : null; });
+}
+function reblurMasks(){
+  if(!gl || glLost) return;
+  ['ref', 'draw'].forEach(function(k){ if(maskGL[k]) freeMask(maskGL[k]); });
+  remakeMasks();
 }
 // The Edges view's colors follow the page's theme, like the old tool's.
 var edgeCols = null;
@@ -431,6 +480,8 @@ function onWorker(e){
     if(m.id !== C.maskJobs[m.which]) return;
     if(m.error){ C.maskJobs[m.which] = 0; toast('Couldn’t find the lines in that picture.'); return; }
     setMask(m.which, m.mask);
+    // For the Debug menu's timings (debug.js), if it's loaded.
+    document.dispatchEvent(new CustomEvent('squintcheck:mask', { detail:{ which:m.which, mask:m.mask } }));
     if(m.which === 'draw' && !m.mask.edges) toast('No lines found in that photo. Try a sharper, better-lit one.', 4000);
     paint();
     return;

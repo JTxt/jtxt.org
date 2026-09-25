@@ -138,6 +138,7 @@ var CHECK_FRAG = [
   'uniform float u_hasDraw; uniform float u_hasLine; uniform float u_style; uniform float u_rHas;',
   'uniform vec4 u_dLine; uniform vec4 u_rLine; uniform vec2 u_dTexel; uniform vec2 u_rTexel;',
   'uniform vec3 u_ink; uniform vec3 u_haloC;',
+  'uniform vec4 u_look; uniform vec2 u_eBase;',   // faintest Outline brightness, halo alpha, Edges glow; Edges' faintest (ref, drawing)
   'uniform vec4 u_frame; uniform float u_frameOn;',
   'uniform float u_grid; uniform vec2 u_gridPx;',
   'uniform float u_edges; uniform vec3 u_eBg; uniform vec3 u_eRef; uniform vec3 u_eDraw;',
@@ -158,11 +159,13 @@ var CHECK_FRAG = [
   '  return 0.25*(texture2D(m, p + o) + texture2D(m, p - o) + texture2D(m, p + vec2(o.x, -o.y)) + texture2D(m, p + vec2(-o.x, o.y)));',
   '}',
   'float lineOf(float v, vec4 l){ return smoothstep(l.x - l.y, l.x + l.y, v); }',
-  // How strong the edges here are, 0 to 1: the weighted blur over the plain one.
+  // How strong the marks here are, 0 to 1: the weighted blur over the plain one; and how much
+  // they show (a stroke part line, part outline shows each partly): the alpha blur over it.
   'float strength(vec4 f){ return clamp(f.g / max(f.r, 0.004), 0.0, 1.0); }',
+  'float shows(vec4 f){ return clamp(f.a / max(f.r, 0.004), 0.0, 1.0); }',
   // Edges view: the line, a soft bloom from the blur below it, brighter where edges are stronger.
   'float edgeA(vec4 f, vec4 l, float base){',
-  '  return max(lineOf(f.r, l), 0.35*clamp(f.r/l.x, 0.0, 1.0)) * (base + (1.0 - base)*strength(f));',
+  '  return max(lineOf(f.r, l), u_look.z*clamp(f.r/l.x, 0.0, 1.0)) * (base + (1.0 - base)*strength(f)) * shows(f);',
   '}',
   'void main(){',
   '  vec2 r = (u_toRef * vec3(v_uv, 1.0)).xy;',
@@ -181,13 +184,13 @@ var CHECK_FRAG = [
   '  float a = 1.0 - u_mix;',
   '  if(edges){',
   // The reference's mask is stored top-down, the reference texture bottom-up.
-  '    if(inRef && u_rHas > 0.5) c = mix(c, u_eRef, edgeA(maskAt(u_rMask, vec2(r.x, 1.0 - r.y), u_rTexel, u_rLine.w), u_rLine, 0.3));',
-  '    if(inDraw && u_hasLine > 0.5) c = mix(c, u_eDraw, edgeA(maskAt(u_dMask, d, u_dTexel, u_dLine.w), u_dLine, 0.35)*a);',
+  '    if(inRef && u_rHas > 0.5) c = mix(c, u_eRef, edgeA(maskAt(u_rMask, vec2(r.x, 1.0 - r.y), u_rTexel, u_rLine.w), u_rLine, u_eBase.x));',
+  '    if(inDraw && u_hasLine > 0.5) c = mix(c, u_eDraw, edgeA(maskAt(u_dMask, d, u_dTexel, u_dLine.w), u_dLine, u_eBase.y)*a);',
   '  } else if(u_hasLine > 0.5 && inDraw){',
   '    if(u_style < 0.5){',
   '      vec4 f = maskAt(u_dMask, d, u_dTexel, u_dLine.w);',
-  '      float k = (0.45 + 0.55*strength(f))*a;',
-  '      c = mix(c, u_haloC, smoothstep(u_dLine.z - u_dLine.y, u_dLine.z + u_dLine.y, f.r)*0.7*k);',
+  '      float k = (u_look.x + (1.0 - u_look.x)*strength(f))*shows(f)*a;',
+  '      c = mix(c, u_haloC, smoothstep(u_dLine.z - u_dLine.y, u_dLine.z + u_dLine.y, f.r)*u_look.y*k);',
   '      c = mix(c, u_ink, lineOf(f.r, u_dLine)*k);',
   '    } else if(u_style < 1.5){',
   '      c = mix(c, u_ink, smoothstep(0.2, 0.45, texture2D(u_dMask, d).b)*0.95*a);',

@@ -65,7 +65,7 @@ function initGL(){
   GU = uniforms(gaussProg, ['u_src','u_texel','u_region','u_srcMax','u_dir','u_radius']);
   CU = uniforms(checkProg, ['u_ref','u_draw','u_dMask','u_dRaw','u_rMask','u_toRef','u_refToDraw','u_bg','u_mode','u_mix',
     'u_hasDraw','u_hasLine','u_style','u_rHas','u_dLine','u_rLine','u_dTexel','u_rTexel','u_ink','u_haloC',
-    'u_frame','u_frameOn','u_grid','u_gridPx','u_edges','u_eBg','u_eRef','u_eDraw']);
+    'u_frame','u_frameOn','u_grid','u_gridPx','u_edges','u_eBg','u_eRef','u_eDraw','u_look','u_eBase']);
   MU = uniforms(maskProg, ['u_src','u_step','u_sigma','u_scale']);
   quad = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, quad);
@@ -152,8 +152,8 @@ function runBlur(radius){
 
 // An edge mask from the worker ({w, h, data}), uploaded, then blurred once by a Gaussian
 // of `sigma` texels into its own texture: one pass across, one down. Both are read with
-// bilinear filtering. The edge channels are scaled so a straight one-texel edge peaks at
-// `peak`, leaving room above it where edges crowd together.
+// bilinear filtering. The mark channels (all but B, the ink) are scaled so a straight
+// one-texel mark peaks at `peak`, leaving room above it where marks crowd together.
 function blurMask(m, sigma, peak){
   var raw = makeTex();
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
@@ -169,7 +169,7 @@ function blurMask(m, sigma, peak){
   gl.uniform2f(MU.u_step, 1/m.w, 0); gl.uniform4f(MU.u_scale, 1, 1, 1, 1); drawQuad();
   gl.bindFramebuffer(gl.FRAMEBUFFER, out.fbo);
   gl.bindTexture(gl.TEXTURE_2D, tmp.tex);
-  gl.uniform2f(MU.u_step, 0, 1/m.h); gl.uniform4f(MU.u_scale, peak*sum, peak*sum, 1, 1); drawQuad();
+  gl.uniform2f(MU.u_step, 0, 1/m.h); gl.uniform4f(MU.u_scale, peak*sum, peak*sum, 1, peak*sum); drawQuad();
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   killFBO(tmp);
   return { raw:raw, blur:out };
