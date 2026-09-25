@@ -241,6 +241,20 @@ function syncEmpty(){
 
 function applySurround(){ document.documentElement.style.setProperty('--surround', SURROUNDS[S.surround]); }
 
+// Dark mode: Auto follows the device's setting; On and Off override it on this page.
+// The page's <head> applies the stored choice before anything draws, so it never flashes.
+var THEMES = { auto:1, dark:1, light:1 };
+var theme = THEMES[load('theme', 'auto')] ? load('theme', 'auto') : 'auto';
+function applyTheme(){
+  if(theme === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', theme);
+  edgeCols = null;
+}
+function setTheme(t){
+  theme = THEMES[t] ? t : 'auto'; store('theme', theme);
+  applyTheme(); syncUI(); drawStrip(); paint();
+}
+
 // =============================================================
 // Loading the reference
 // =============================================================

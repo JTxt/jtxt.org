@@ -293,6 +293,7 @@ function syncSquint(){
   tools.looks.classList.toggle('on', looksOpen);
 
   pressed(document.querySelectorAll('#surroundSeg button'), function(b){ return b.dataset.v === S.surround; });
+  pressed(document.querySelectorAll('#themeSeg button'), function(b){ return b.dataset.v === theme; });
 
 }
 
@@ -424,6 +425,9 @@ Array.prototype.forEach.call(document.querySelectorAll('#surroundSeg button'), f
     if(looksOpen) buildLooks();
     syncUI(); paint();
   });
+});
+Array.prototype.forEach.call(document.querySelectorAll('#themeSeg button'), function(b){
+  b.addEventListener('click', function(){ setTheme(b.dataset.v); });
 });
 function savePNG(){
   if(!hasImage || !gl || glLost) return;

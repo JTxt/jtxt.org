@@ -1,4 +1,4 @@
-/* Squint & Check. WebGL: programs, textures, framebuffers, the blur pyramid, and drawing the Squint view.
+/* Squint & Check. WebGL: programs, textures, framebuffers, the blur pyramid, blurring the edge masks, and drawing the Squint view.
    Loaded by index.html; the scripts share one global scope.
    co-authors: jtxt.org and claude opus 5.5 */
 "use strict";
@@ -7,8 +7,8 @@
 // WebGL
 // =============================================================
 var gl = null, glLost = false;
-var mainProg, boxProg, gaussProg, checkProg, U = {}, BU = {}, GU = {}, CU = {};
-var mainA, boxA, gaussA, checkA, quad, texture, drawTex, lineTex, refEdgeTex, drawEdgeTex, fboA = null, fboB = null;
+var mainProg, boxProg, gaussProg, checkProg, maskProg, U = {}, BU = {}, GU = {}, CU = {}, MU = {};
+var mainA, boxA, gaussA, checkA, maskA, quad, texture, drawTex, noMask, fboA = null, fboB = null;
 var texW = 0, texH = 0, levels = [];
 var imgW = 0, imgH = 0, hasImage = false, lastPrepared = null, lastName = '';
 
@@ -37,9 +37,9 @@ function makeTex(){
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   return t;
 }
-function blankTex(){
+function blankTex(rgba){
   var t = makeTex();
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255,255,255,0]));
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(rgba || [255,255,255,0]));
   return t;
 }
 
@@ -51,24 +51,27 @@ function initGL(){
   boxProg = makeProgram(VERT, BOX_FRAG, 'box');
   gaussProg = makeProgram(VERT, GAUSS_FRAG, 'gauss');
   checkProg = makeProgram(VERT, CHECK_FRAG, 'check');
+  maskProg = makeProgram(VERT, MASK_FRAG, 'mask');
   mainA = gl.getAttribLocation(mainProg, 'a_position');
   boxA = gl.getAttribLocation(boxProg, 'a_position');
   gaussA = gl.getAttribLocation(gaussProg, 'a_position');
   checkA = gl.getAttribLocation(checkProg, 'a_position');
+  maskA = gl.getAttribLocation(maskProg, 'a_position');
   U = uniforms(mainProg, ['u_image','u_canvasSize','u_imageSize','u_pan','u_rotation','u_flipX','u_flipY',
     'u_fitScale','u_zoom','u_bgAlpha','u_bg','u_chroma','u_n','u_iso','u_grid','u_outL']);
   U.u_th = gl.getUniformLocation(mainProg, 'u_th[0]');
   U.u_tone = gl.getUniformLocation(mainProg, 'u_tone[0]');
   BU = uniforms(boxProg, ['u_src','u_texel','u_region','u_srcMax','u_off']);
   GU = uniforms(gaussProg, ['u_src','u_texel','u_region','u_srcMax','u_dir','u_radius']);
-  CU = uniforms(checkProg, ['u_ref','u_draw','u_line','u_toRef','u_refToDraw','u_bg','u_mode','u_mix',
-    'u_hasDraw','u_hasLine','u_style','u_w','u_halo','u_aa','u_maxD','u_ink','u_haloC','u_frame','u_frameOn','u_grid','u_gridPx',
-    'u_refEdge','u_drawEdge','u_edges','u_rHas','u_eMaxD','u_rW','u_dW','u_eBg','u_eRef','u_eDraw']);
+  CU = uniforms(checkProg, ['u_ref','u_draw','u_dMask','u_dRaw','u_rMask','u_toRef','u_refToDraw','u_bg','u_mode','u_mix',
+    'u_hasDraw','u_hasLine','u_style','u_rHas','u_dLine','u_rLine','u_dTexel','u_rTexel','u_ink','u_haloC',
+    'u_frame','u_frameOn','u_grid','u_gridPx','u_edges','u_eBg','u_eRef','u_eDraw']);
+  MU = uniforms(maskProg, ['u_src','u_step','u_sigma','u_scale']);
   quad = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, quad);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
   texture = makeTex();
-  drawTex = blankTex(); lineTex = blankTex(); refEdgeTex = blankTex(); drawEdgeTex = blankTex();
+  drawTex = blankTex(); noMask = blankTex([0,0,0,0]);
   return true;
 }
 
@@ -146,6 +149,32 @@ function runBlur(radius){
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   return cur.tex;
 }
+
+// An edge mask from the worker ({w, h, data}), uploaded, then blurred once by a Gaussian
+// of `sigma` texels into its own texture: one pass across, one down. Both are read with
+// bilinear filtering. The edge channels are scaled so a straight one-texel edge peaks at
+// `peak`, leaving room above it where edges crowd together.
+function blurMask(m, sigma, peak){
+  var raw = makeTex();
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m.w, m.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, m.data);
+  var tmp = makeFBO(m.w, m.h), out = makeFBO(m.w, m.h), sum = 0;
+  for(var i = -6; i <= 6; i++) sum += Math.exp(-i*i/(2*sigma*sigma));
+  gl.useProgram(maskProg); bindQuad(maskA);
+  gl.activeTexture(gl.TEXTURE0); gl.uniform1i(MU.u_src, 0);
+  gl.uniform1f(MU.u_sigma, sigma);
+  gl.viewport(0, 0, m.w, m.h);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, tmp.fbo);
+  gl.bindTexture(gl.TEXTURE_2D, raw);
+  gl.uniform2f(MU.u_step, 1/m.w, 0); gl.uniform4f(MU.u_scale, 1, 1, 1, 1); drawQuad();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, out.fbo);
+  gl.bindTexture(gl.TEXTURE_2D, tmp.tex);
+  gl.uniform2f(MU.u_step, 0, 1/m.h); gl.uniform4f(MU.u_scale, peak*sum, peak*sum, 1, 1); drawQuad();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  killFBO(tmp);
+  return { raw:raw, blur:out };
+}
+function freeMask(g){ if(g){ gl.deleteTexture(g.raw); killFBO(g.blur); } }
 
 function fitScaleFor(rot, iw, ih, cw, ch){
   var c = Math.abs(Math.cos(rot)), s = Math.abs(Math.sin(rot));

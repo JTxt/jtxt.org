@@ -10,6 +10,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tagesschrift&family=Atkinson+Hyperlegible+Next:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<!-- Dark mode set to On or Off in Looks, applied before the page draws so it doesn't flash. -->
+<script>try{var t=localStorage.getItem('squintcheck.theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 </head>
 <body>
 <div id="app" data-mode="squint">
@@ -176,7 +178,7 @@
           <div class="chips" id="showChips" role="group" aria-labelledby="showLbl">
             <button class="chip" type="button" id="showSquint" title="Show the reference the way Reference Squint does">Squint</button>
             <button class="chip" type="button" id="showColor" title="A blue outline instead of the neutral one">Color</button>
-            <button class="chip" type="button" id="showLine" title="How the drawing shows: Outline, Soft, Tint (like the old Drawing matcher), Hairline, or no line">Outline</button>
+            <button class="chip" type="button" id="showLine" title="How the drawing shows: Outline, Edges (both pictures as their edges), Soft, Tint (like the old Drawing matcher), or no line">Outline</button>
           </div>
         </div>
 
@@ -214,7 +216,7 @@
         <div>
           <h3>Boundaries</h3>
           <p>Fitted puts the boundaries between the picture’s own groups of value. Even spaces them equally from black to white.</p>
-          <div class="seg" id="splitSeg">
+          <div class="seg accent" id="splitSeg">
             <button type="button" data-v="fit">Fitted</button>
             <button type="button" data-v="even">Even</button>
           </div>
@@ -222,7 +224,7 @@
         <div>
           <h3>Tones</h3>
           <p>As seen paints each band its average value. Value scale spreads the bands evenly from black to white.</p>
-          <div class="seg" id="tonesSeg">
+          <div class="seg accent" id="tonesSeg">
             <button type="button" data-v="seen">As seen</button>
             <button type="button" data-v="scale">Value scale</button>
           </div>
@@ -230,11 +232,20 @@
         <div>
           <h3>Surround</h3>
           <p>The color around the picture changes how light or dark it looks. A neutral mid gray gives the most honest read.</p>
-          <div class="seg" id="surroundSeg">
+          <div class="seg accent" id="surroundSeg">
             <button type="button" data-v="black">Black</button>
             <button type="button" data-v="dark">Dark</button>
             <button type="button" data-v="mid">Mid gray</button>
             <button type="button" data-v="white">White</button>
+          </div>
+        </div>
+        <div>
+          <h3>Dark mode</h3>
+          <p>Auto follows your device’s setting. On and Off choose for this page.</p>
+          <div class="seg accent" id="themeSeg">
+            <button type="button" data-v="auto">Auto</button>
+            <button type="button" data-v="dark">On</button>
+            <button type="button" data-v="light">Off</button>
           </div>
         </div>
       </div>

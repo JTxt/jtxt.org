@@ -22,9 +22,7 @@ canvas.addEventListener('webglcontextrestored', function(){
   if(!initGL()) return;
   if(lastPrepared){ upload(lastPrepared); setupTargets(imgW, imgH); histCache = {}; histDirty = true; }
   if(C.drawCanvas) uploadDraw();
-  if(C.field && C.fieldData) uploadField();
-  if(C.refEdge) uploadEdge('ref');
-  if(C.drawEdge) uploadEdge('draw');
+  remakeMasks();
   paint();
 });
 
@@ -35,6 +33,7 @@ document.addEventListener('selectstart', function(e){ e.preventDefault(); });
 document.addEventListener('dragstart', function(e){ e.preventDefault(); });
 
 applySurround();
+applyTheme();
 if(!initGL()){
   document.querySelector('#empty .lead').textContent = 'This browser can’t run WebGL, which this tool needs to draw the picture.';
   document.querySelector('#empty .actions').style.display = 'none';
@@ -44,7 +43,8 @@ sizeCanvas();
 requestAnimationFrame(drawStrip);
 
 // For testing in a browser console: window.__sc.state()
-window.__sc = { state:function(){ return { mode:MODE, hasImage:hasImage, view:view, C:{ has:C.has, P:C.P, auto:C.auto, moved:C.moved, field:C.field, frame:C.frame, frameOn:C.frameOn, matching:C.matching, status:C.status, box:C.box, refEdge:C.refEdge, drawEdge:C.drawEdge, line:C.line }, S:{ n:S.n, th:S.th, shift:S.shift, split:S.split } }; },
+window.__sc = { state:function(){ return { mode:MODE, hasImage:hasImage, view:view, C:{ has:C.has, P:C.P, auto:C.auto, moved:C.moved, frame:C.frame, frameOn:C.frameOn, matching:C.matching, status:C.status, box:C.box, line:C.line,
+    mask:{ ref:C.mask.ref && { w:C.mask.ref.w, h:C.mask.ref.h, edges:C.mask.ref.edges }, draw:C.mask.draw && { w:C.mask.draw.w, h:C.mask.draw.h, edges:C.mask.draw.edges } } }, S:{ n:S.n, th:S.th, shift:S.shift, split:S.split } }; },
   loadPair:loadPair, setMode:setMode, loadDrawing:loadDrawing, refSize:function(){ return [C.rw, C.rh]; },
   // Client coordinates of the rotate handle and the frame's corners, for scripted pointer tests.
   handle:function(){ var r = stage.getBoundingClientRect(), g = handleGeom(m3inv(viewToRef(canvas.width, canvas.height))); return [r.left + g.handle[0], r.top + g.handle[1]]; },

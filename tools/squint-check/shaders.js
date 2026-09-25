@@ -1,4 +1,4 @@
-/* Squint & Check. The GLSL programs: the Squint blur passes and value bands, and the Drawing Check composite.
+/* Squint & Check. The GLSL programs: the Squint blur passes and value bands, the mask blur, and the Drawing Check composite.
    Loaded by index.html; the scripts share one global scope.
    co-authors: jtxt.org and claude opus 5.5 */
 "use strict";
@@ -102,27 +102,45 @@ var MAIN_FRAG = [
   '}'
 ].join('\n');
 
-// Drawing Check: the reference (plain, or squinted by the Squint pipeline), with
-// the drawing's lines drawn from a distance field (distance to the nearest line,
-// per texel), so they stay smooth at any zoom. Fade (u_mix) brings the drawing
-// photo in over the reference as the outline goes out. Edges (u_edges) replaces the
-// reference with its own edges on a plain background, and the drawing with its edges,
-// each drawn with a thin core and a soft bloom. Mode 1 draws the drawing photo alone
-// and mode 2 the reference alone, both for the side-by-side save.
+// A mask from the worker, blurred once on the GPU when it arrives: one pass across,
+// then one down (u_step picks the direction). u_scale lifts the edge channels so a
+// straight one-texel edge peaks at the same level whatever the blur.
+var MASK_FRAG = [
+  'precision highp float;',
+  'varying vec2 v_uv;',
+  'uniform sampler2D u_src; uniform vec2 u_step; uniform float u_sigma; uniform vec4 u_scale;',
+  'void main(){',
+  '  vec4 s = vec4(0.0); float ws = 0.0;',
+  '  for(int i = -6; i <= 6; i++){',
+  '    float x = float(i), w = exp(-x*x/(2.0*u_sigma*u_sigma));',
+  '    s += texture2D(u_src, v_uv + u_step*x)*w; ws += w;',
+  '  }',
+  '  gl_FragColor = s/ws*u_scale;',
+  '}'
+].join('\n');
+
+// Drawing Check: the reference (plain, or squinted by the Squint pipeline), with the
+// drawing's edges over it as a line. Each picture's edge mask was blurred once when it
+// arrived; here the blur is thresholded into a smooth, thick line, and a line is only
+// as bright as its edges are strong. Fade (u_mix) brings the drawing photo in over the
+// reference as the line goes out. Edges (u_edges) replaces the reference with its own
+// edges on a plain background, the drawing's over them. Mode 1 draws the drawing photo
+// alone and mode 2 the reference alone, both for the side-by-side save.
+// A line's uniform (vec4): threshold, antialiasing half-width, halo threshold (all in
+// the blurred mask's units), and mask texels per output pixel.
 var CHECK_FRAG = [
   'precision highp float;',
   'varying vec2 v_uv;',
-  'uniform sampler2D u_ref; uniform sampler2D u_draw; uniform sampler2D u_line;',
+  'uniform sampler2D u_ref; uniform sampler2D u_draw;',
+  'uniform sampler2D u_dMask; uniform sampler2D u_dRaw; uniform sampler2D u_rMask;',
   'uniform mat3 u_toRef; uniform mat3 u_refToDraw;',
   'uniform vec3 u_bg; uniform float u_mode; uniform float u_mix;',
-  'uniform float u_hasDraw; uniform float u_hasLine; uniform float u_style;',
-  'uniform float u_w; uniform float u_halo; uniform float u_aa; uniform float u_maxD;',
+  'uniform float u_hasDraw; uniform float u_hasLine; uniform float u_style; uniform float u_rHas;',
+  'uniform vec4 u_dLine; uniform vec4 u_rLine; uniform vec2 u_dTexel; uniform vec2 u_rTexel;',
   'uniform vec3 u_ink; uniform vec3 u_haloC;',
   'uniform vec4 u_frame; uniform float u_frameOn;',
   'uniform float u_grid; uniform vec2 u_gridPx;',
-  'uniform sampler2D u_refEdge; uniform sampler2D u_drawEdge;',
-  'uniform float u_edges; uniform float u_rHas; uniform float u_eMaxD;',
-  'uniform vec3 u_rW; uniform vec3 u_dW; uniform vec3 u_eBg; uniform vec3 u_eRef; uniform vec3 u_eDraw;',
+  'uniform float u_edges; uniform vec3 u_eBg; uniform vec3 u_eRef; uniform vec3 u_eDraw;',
   'bool inside(vec2 p){ return p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0; }',
   // The same grid Squint draws: black on light passages, white on dark ones.
   'vec3 gridOver(vec3 c, vec2 r){',
@@ -132,13 +150,19 @@ var CHECK_FRAG = [
   '  float y = dot(c*c, vec3(0.2126, 0.7152, 0.0722));',
   '  return mix(c, y > 0.18 ? vec3(0.0) : vec3(1.0), on*0.7);',
   '}',
-  // An edge from its field: t.x is the distance, t.y the edge's weight; wv is core, bloom
-  // and antialiasing width in texels. Stronger, longer edges show brighter, as in the old view.
-  'float edgeLine(vec2 t, vec3 wv, float base, float gain){',
-  '  float dist = t.x * u_eMaxD;',
-  '  float core = 1.0 - smoothstep(wv.x - wv.z, wv.x + wv.z, dist);',
-  '  float glow = exp(-(dist*dist) / max(wv.y*wv.y, 0.0001));',
-  '  return clamp((base + gain*t.y) * max(core, 0.5*glow), 0.0, 1.0);',
+  // A blurred mask, read with bilinear filtering. Zoomed far out, where one output pixel
+  // spans several texels, four taps across the pixel keep thin lines from breaking up.
+  'vec4 maskAt(sampler2D m, vec2 p, vec2 texel, float fp){',
+  '  if(fp < 1.5) return texture2D(m, p);',
+  '  vec2 o = texel*fp*0.3;',
+  '  return 0.25*(texture2D(m, p + o) + texture2D(m, p - o) + texture2D(m, p + vec2(o.x, -o.y)) + texture2D(m, p + vec2(-o.x, o.y)));',
+  '}',
+  'float lineOf(float v, vec4 l){ return smoothstep(l.x - l.y, l.x + l.y, v); }',
+  // How strong the edges here are, 0 to 1: the weighted blur over the plain one.
+  'float strength(vec4 f){ return clamp(f.g / max(f.r, 0.004), 0.0, 1.0); }',
+  // Edges view: the line, a soft bloom from the blur below it, brighter where edges are stronger.
+  'float edgeA(vec4 f, vec4 l, float base){',
+  '  return max(lineOf(f.r, l), 0.35*clamp(f.r/l.x, 0.0, 1.0)) * (base + (1.0 - base)*strength(f));',
   '}',
   'void main(){',
   '  vec2 r = (u_toRef * vec3(v_uv, 1.0)).xy;',
@@ -154,22 +178,21 @@ var CHECK_FRAG = [
   '  if(edges && inRef) c = u_eBg;',
   '  if(inDraw) c = mix(c, texture2D(u_draw, d).rgb, u_mix);',
   '  if(inRef) c = gridOver(c, r);',
+  '  float a = 1.0 - u_mix;',
   '  if(edges){',
-  // The reference's edge field is stored top-down, the reference texture bottom-up.
-  '    if(inRef && u_rHas > 0.5) c = mix(c, u_eRef, edgeLine(texture2D(u_refEdge, vec2(r.x, 1.0 - r.y)).rg, u_rW, 0.25, 0.6));',
-  '    if(inDraw && u_hasLine > 0.5) c = mix(c, u_eDraw, edgeLine(texture2D(u_drawEdge, d).rg, u_dW, 0.3, 0.7) * (1.0 - u_mix));',
+  // The reference's mask is stored top-down, the reference texture bottom-up.
+  '    if(inRef && u_rHas > 0.5) c = mix(c, u_eRef, edgeA(maskAt(u_rMask, vec2(r.x, 1.0 - r.y), u_rTexel, u_rLine.w), u_rLine, 0.3));',
+  '    if(inDraw && u_hasLine > 0.5) c = mix(c, u_eDraw, edgeA(maskAt(u_dMask, d, u_dTexel, u_dLine.w), u_dLine, 0.35)*a);',
   '  } else if(u_hasLine > 0.5 && inDraw){',
-  '    vec4 t = texture2D(u_line, d); float a = 1.0 - u_mix;',
   '    if(u_style < 0.5){',
-  '      float dist = t.r * u_maxD;',
-  '      float line = 1.0 - smoothstep(u_w - u_aa, u_w + u_aa, dist);',
-  '      float halo = 1.0 - smoothstep(u_w + u_halo - u_aa, u_w + u_halo + u_aa, dist);',
-  '      c = mix(c, u_haloC, halo*0.8*a);',
-  '      c = mix(c, u_ink, line*a);',
+  '      vec4 f = maskAt(u_dMask, d, u_dTexel, u_dLine.w);',
+  '      float k = (0.45 + 0.55*strength(f))*a;',
+  '      c = mix(c, u_haloC, smoothstep(u_dLine.z - u_dLine.y, u_dLine.z + u_dLine.y, f.r)*0.7*k);',
+  '      c = mix(c, u_ink, lineOf(f.r, u_dLine)*k);',
   '    } else if(u_style < 1.5){',
-  '      c = mix(c, u_ink, smoothstep(0.2, 0.45, t.b)*0.95*a);',
+  '      c = mix(c, u_ink, smoothstep(0.2, 0.45, texture2D(u_dMask, d).b)*0.95*a);',
   '    } else {',
-  '      c = mix(c, u_ink, t.g*0.85*a);',
+  '      c = mix(c, u_ink, texture2D(u_dRaw, d).b*0.85*a);',
   '    }',
   '  }',
   '  if(u_frameOn > 0.5 && (r.x < u_frame.x || r.x > u_frame.z || r.y < u_frame.y || r.y > u_frame.w)) c = mix(c, edges ? u_eBg : u_bg, 0.6);',

@@ -784,6 +784,6 @@
     analyze: analyze,    // proportion map for any placement {scale, theta, tx, ty}
     edges: edges,
     apply: apply,
-    detectEdges: detectEdges  // added for Squint & Check's Edges view: (gray, w, h, sigma, options)
+    detectEdges: detectEdges  // added for Squint & Check's lines (its edge masks): (gray, w, h, sigma, options)
   };
 }));
