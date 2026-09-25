@@ -11,7 +11,7 @@
  *
  * co-authors: jtxt.org and claude opus 5.5
  */
-importScripts('match.js');
+importScripts('match.js' + self.location.search);   // the same ?v= as this worker
 
 var refImg = null, drawImg = null, prep = null;
 

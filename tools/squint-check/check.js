@@ -355,10 +355,12 @@ function stopAnim(){ C.anim = null; }
 
 // ---------- The worker does the matching and finds the lines
 var worker = null, sent = { ref:false, draw:false }, jobSeq = 0;
+// The worker gets this script's ?v= (see index.html), so it can't be an old cached copy.
+var FILE_V = (function(){ var c = document.currentScript, q = c && c.src.split('?')[1]; return q ? '?' + q : ''; })();
 function getWorker(){
   if(worker) return worker;
   try {
-    worker = new Worker('check-worker.js');
+    worker = new Worker('check-worker.js' + FILE_V);
     worker.onmessage = onWorker;
     worker.onerror = function(ev){
       if(ev && ev.preventDefault) ev.preventDefault();
