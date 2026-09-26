@@ -198,7 +198,6 @@ function setComparing(on){
   beforeTag.textContent = MODE === 'check' ? 'Reference only' : 'Before';
   beforeTag.classList.toggle('show', on);
   tools.before.classList.toggle('held', on);
-  ctools.peek.classList.toggle('held', on);
   paint();
 }
 function holdButton(btn){
@@ -222,6 +221,7 @@ function holdButton(btn){
 function setMode(m){
   if(m !== 'check') m = 'squint';
   if(looksOpen) closeLooks();
+  if(viewsOpen) closeViews();
   setComparing(false);
   MODE = m; app.dataset.mode = m; store('mode', m);
   readout.classList.remove('show');

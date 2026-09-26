@@ -12,7 +12,7 @@
   // GPU, 'paint' only redraws.
   var DEFS = [
     { group:'Edges: outlines of value shapes' },
-    { key:'edgeSide', label:'Mask size (px)', min:512, max:1600, step:64, kind:'mask' },
+    { key:'edgeSide', label:'Mask size (px)', min:512, max:3200, step:64, kind:'mask' },
     { key:'edgeSigma', label:'Edge blur', min:0.3, max:2, step:0.05, kind:'mask' },
     { key:'edgeThreshold', label:'Faintest edge kept', min:0, max:0.6, step:0.01, kind:'mask' },
     { key:'edgeMinLen', label:'Shortest edge kept (× long side)', min:0, max:0.1, step:0.005, kind:'mask' },
@@ -71,7 +71,7 @@
     '.dbg-row{ display:grid; grid-template-columns:minmax(0,1fr) 58px; align-items:center; column-gap:8px; padding:2px 0; }',
     '.dbg-row label{ grid-column:1 / 3; font-size:13px; }',
     '.dbg-row input[type=range]{ height:26px; }',
-    '.dbg-row output{ font-size:13px; min-width:0; }',
+    '.dbg-row output{ font-size:13px; min-width:0; cursor:pointer; }',
     '.dbg-row.changed label{ color:var(--accent); font-weight:700; }',
     '#debugFoot{ display:flex; gap:8px; align-items:center; padding:8px 10px; border-top:1px solid var(--line); }',
     '#debugCount{ flex:1; font-size:12.5px; color:var(--muted); }',
@@ -113,6 +113,15 @@
       syncRow(d); syncFoot();
       redo(d.kind);
     });
+    // Tapping the value puts that slider back to its default.
+    out.addEventListener('click', function(){
+      if(!(d.key in saved)) return;
+      delete saved[d.key];
+      store('tune', JSON.stringify(saved));
+      TUNE[d.key] = DEFAULT[d.key];
+      syncRow(d); syncFoot();
+      redo(d.kind);
+    });
     body.appendChild(r);
     rows[d.key] = { el:r, input:input, out:out };
   });
@@ -121,7 +130,7 @@
     r.input.value = v; r.out.textContent = fmt(d, v);
     r.input.style.setProperty('--p', ((v - d.min)/(d.max - d.min)*100) + '%');
     r.el.classList.toggle('changed', d.key in saved);
-    r.el.title = 'Default ' + fmt(d, DEFAULT[d.key]);
+    r.el.title = 'Default ' + fmt(d, DEFAULT[d.key]) + '. Tap the value to reset it.';
   }
   function syncFoot(){
     var n = Object.keys(saved).length;

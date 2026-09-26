@@ -122,9 +122,10 @@ var MASK_FRAG = [
 // Drawing Check: the reference (plain, or squinted by the Squint pipeline), with the
 // drawing's edges over it as a line. Each picture's edge mask was blurred once when it
 // arrived; here the blur is thresholded into a smooth, thick line, and a line is only
-// as bright as its edges are strong. Fade (u_mix) brings the drawing photo in over the
-// reference as the line goes out. Edges (u_edges) replaces the reference with its own
-// edges on a plain background, the drawing's over them. Mode 1 draws the drawing photo
+// as bright as its edges are strong. The Reference-Drawing slider sets u_mix (how much the
+// drawing photo shows over the reference) and u_lineA (how much the line shows on top).
+// Edges (u_edges) replaces the reference with its own edges on a plain background (as
+// strong as u_rEdgeA), the drawing's over them. Mode 1 draws the drawing photo
 // alone and mode 2 the reference alone, both for the side-by-side save.
 // A line's uniform (vec4): threshold, antialiasing half-width, halo threshold (all in
 // the blurred mask's units), and mask texels per output pixel.
@@ -134,7 +135,7 @@ var CHECK_FRAG = [
   'uniform sampler2D u_ref; uniform sampler2D u_draw;',
   'uniform sampler2D u_dMask; uniform sampler2D u_dRaw; uniform sampler2D u_rMask;',
   'uniform mat3 u_toRef; uniform mat3 u_refToDraw;',
-  'uniform vec3 u_bg; uniform float u_mode; uniform float u_mix;',
+  'uniform vec3 u_bg; uniform float u_mode; uniform float u_mix; uniform float u_lineA; uniform float u_rEdgeA;',
   'uniform float u_hasDraw; uniform float u_hasLine; uniform float u_style; uniform float u_rHas;',
   'uniform vec4 u_dLine; uniform vec4 u_rLine; uniform vec2 u_dTexel; uniform vec2 u_rTexel;',
   'uniform vec3 u_ink; uniform vec3 u_haloC;',
@@ -181,10 +182,10 @@ var CHECK_FRAG = [
   '  if(edges && inRef) c = u_eBg;',
   '  if(inDraw) c = mix(c, texture2D(u_draw, d).rgb, u_mix);',
   '  if(inRef) c = gridOver(c, r);',
-  '  float a = 1.0 - u_mix;',
+  '  float a = u_lineA;',
   '  if(edges){',
   // The reference's mask is stored top-down, the reference texture bottom-up.
-  '    if(inRef && u_rHas > 0.5) c = mix(c, u_eRef, edgeA(maskAt(u_rMask, vec2(r.x, 1.0 - r.y), u_rTexel, u_rLine.w), u_rLine, u_eBase.x));',
+  '    if(inRef && u_rHas > 0.5) c = mix(c, u_eRef, edgeA(maskAt(u_rMask, vec2(r.x, 1.0 - r.y), u_rTexel, u_rLine.w), u_rLine, u_eBase.x)*u_rEdgeA);',
   '    if(inDraw && u_hasLine > 0.5) c = mix(c, u_eDraw, edgeA(maskAt(u_dMask, d, u_dTexel, u_dLine.w), u_dLine, u_eBase.y)*a);',
   '  } else if(u_hasLine > 0.5 && inDraw){',
   '    if(u_style < 0.5){',

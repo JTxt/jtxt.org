@@ -18,13 +18,33 @@
 //   style 3: Edges, both pictures as their edges on a plain background, like the old
 //            Drawing matcher's Edges view (reference gray, drawing blue)
 var LINES = {
-  outline:{ style:0, label:'Outline' },
-  edges:{ style:3, label:'Edges' },
-  soft:{ style:1, label:'Soft' },
-  tint:{ style:2, label:'Tint' },
-  off:{ style:0, label:'No line' }
+  outline:{ style:0 }, edges:{ style:3 }, soft:{ style:1 }, tint:{ style:2 }, off:{ style:0 }
 };
-var LINE_ORDER = ['outline', 'edges', 'soft', 'tint', 'off'];
+// Views: each a whole setup, chosen from the Views sheet (like Reference Squint's Looks).
+//   line: how the drawing shows (LINES)   ink: the line's color   squint: the reference with
+//   Reference Squint's look   drift: arrows and the score   mix: where the slider starts, 0 to 100
+// Soft isn't a view any more (it was nearly Tint); the shader keeps it.
+var VIEWS = {
+  outline:{ name:'Outline', desc:'A thin line on the reference', line:'outline', ink:'neutral', mix:15 },
+  blue:{ name:'Blue line', desc:'The same line, in blue', line:'outline', ink:'color', mix:15 },
+  values:{ name:'Values', desc:'The reference squinted to values', line:'outline', ink:'neutral', squint:true, mix:15 },
+  edges:{ name:'Edges', desc:'Both as edges on plain paper', line:'edges', ink:'neutral', mix:50 },
+  overlay:{ name:'Overlay', desc:'Your drawing over the reference at half', line:'off', ink:'neutral', mix:50 },
+  tint:{ name:'Tint', desc:'Your marks tinted over the reference', line:'tint', ink:'color', mix:15 },
+  drift:{ name:'Drift', desc:'The outline, with arrows where it drifted', line:'outline', ink:'neutral', drift:true, mix:15 }
+};
+var VIEW_ORDER = ['outline', 'blue', 'values', 'edges', 'overlay', 'tint', 'drift'];
+// The Reference-Drawing slider (s, 0 to 1), as the shader's mix (the drawing photo over the
+// reference), line alpha, and the Edges view's reference edges. Left end: the reference alone.
+// Right end: the drawing alone. In between the line rides on top: from 0.12 to 0.15 over the
+// reference only, then the photo comes in, half at 0.5. In Edges both sets of edges show in
+// the middle, the drawing's fading out to the left and the reference's to the right.
+function sstep(a, b, x){ var t = Math.max(0, Math.min(1, (x - a)/(b - a))); return t*t*(3 - 2*t); }
+function blendFor(line, s){
+  if(line === 'edges') return { mix:0, lineA:Math.min(1, s/0.5), rEdgeA:Math.min(1, (1 - s)/0.5) };
+  return { mix:Math.max(0, Math.min(1, (s - 0.15)/0.7)), lineA:sstep(0.02, 0.12, s)*(1 - sstep(0.88, 0.98, s)), rEdgeA:1 };
+}
+var PEEK_BLEND = { mix:0, lineA:0, rEdgeA:1 };
 // The lines come from a mask of each picture's edges and lines, found by the worker once
 // when the picture loads, blurred once on the GPU, and thresholded every frame. A straight
 // one-texel mark's blur peaks at MASK_PEAK, leaving room above it where marks crowd.
@@ -72,14 +92,20 @@ var C = {
   // Each picture's mask from the worker ({w, h, data, edges}), kept to rebuild the GPU copy.
   mask:{ ref:null, draw:null }, maskJobs:{ ref:0, draw:0 },
   frame:null, frameOn:true,
-  // mix: Fade, 0 (outline only) to 100 (drawing only). squint: show the reference
-  // with Reference Squint's look. color: a blue line instead of the neutral one.
-  mix:Number(load('mix', 0)), squint:false, color:load('lineColor', '0') === '1', line:load('line', 'outline'), move:'view',
+  // view: the chosen view (VIEWS); line, color and squint follow from it (setView).
+  // mix: the Reference-Drawing slider, 0 to 100. drift: the arrows and score, over any view.
+  // analysis: the last drift the worker measured, for the placement P it measured.
+  view:load('view', 'outline'), mix:Number(load('mix', 15)), line:'outline', color:false, squint:false, move:'view',
+  drift:load('drift', '0') === '1', analysis:null, anJob:0,
   matching:false, job:0, status:'', statusBtn:null, lastRange:30,
   hoverOn:false, hoverPt:null
 };
-if(!(C.mix >= 0 && C.mix <= 100)) C.mix = 0;
-if(!LINES[C.line]) C.line = 'outline';
+if(!(C.mix >= 0 && C.mix <= 100)) C.mix = 15;
+if(!VIEWS[C.view]) C.view = 'outline';
+if(C.view === 'drift') C.drift = true;
+viewFields();
+function curView(){ return VIEWS[C.view]; }
+function viewFields(){ var V = VIEWS[C.view]; C.line = V.line; C.color = V.ink === 'color'; C.squint = !!V.squint; }
 var maskGL = { ref:null, draw:null };   // each mask on the GPU: { raw, blur }
 
 function copyP(P){ return { scale:P.scale, theta:P.theta, tx:P.tx, ty:P.ty }; }
@@ -163,10 +189,13 @@ function drawCheck(target, w, h, o){
   var bg = o.bg || surroundRGB();
   gl.uniform3f(CU.u_bg, bg[0], bg[1], bg[2]);
   gl.uniform1f(CU.u_mode, o.mode || 0);
-  gl.uniform1f(CU.u_mix, hasD ? (o.mix || 0) : 0);
+  var line = o.line || C.line, bl = o.blend || blendFor(line, C.mix/100);
+  gl.uniform1f(CU.u_mix, hasD ? bl.mix : 0);
+  gl.uniform1f(CU.u_lineA, bl.lineA);
+  gl.uniform1f(CU.u_rEdgeA, bl.rEdgeA);
   gl.uniform1f(CU.u_hasDraw, hasD ? 1 : 0);
-  var edges = C.line === 'edges', L = LINES[C.line];
-  var lineOn = !!(hasD && o.showLine && gd && C.line !== 'off');
+  var edges = line === 'edges', L = LINES[line];
+  var lineOn = !!(hasD && gd && line !== 'off' && bl.lineA > 0.001);
   gl.uniform1f(CU.u_hasLine, lineOn ? 1 : 0);
   gl.uniform1f(CU.u_style, L.style);
   // Output pixels per mask texel, for the drawing (through its placement) and the reference.
@@ -179,7 +208,7 @@ function drawCheck(target, w, h, o){
   gl.uniform4f(CU.u_rLine, rl[0], rl[1], rl[2], rl[3]);
   gl.uniform2f(CU.u_rTexel, mr ? 1/mr.w : 1, mr ? 1/mr.h : 1);
   gl.uniform1f(CU.u_rHas, refOn ? 1 : 0);
-  var ink = C.color ? INK_COLOR : INK_NEUTRAL;
+  var ink = (o.color != null ? o.color : C.color) ? INK_COLOR : INK_NEUTRAL;
   gl.uniform3f(CU.u_ink, ink[0], ink[1], ink[2]);
   gl.uniform3f(CU.u_haloC, HALO[0], HALO[1], HALO[2]);
   gl.uniform4f(CU.u_look, TUNE.outlineBase, TUNE.haloAlpha, TUNE.bloom, 0);
@@ -204,27 +233,35 @@ function drawCheck(target, w, h, o){
 
 // Drawing Check's controls, from state.
 function syncCheck(){
-  var on = hasImage, d = on && C.has;
-  pressed([$('showSquint')], function(){ return C.squint; });
-  pressed([$('showColor')], function(){ return C.color; });
-  pressed([$('showLine')], function(){ return C.line !== 'off'; });
-  $('showLine').textContent = LINES[C.line].label;
-  ['showSquint', 'showColor', 'showLine'].forEach(function(id){ $(id).disabled = !on; });
-  if(C.line === 'edges') $('showColor').disabled = true;
+  var on = hasImage, d = on && C.has, V = curView();
+  $('viewName').textContent = V.name;
+  $('viewBtn').disabled = !d;
+  $('viewBtn').classList.toggle('open', viewsOpen);
+  pressed([$('driftChip')], function(){ return C.drift; });
+  $('driftChip').disabled = !d;
   fade.value = C.mix;
   fade.disabled = !d;
   fade.style.setProperty('--p', C.mix + '%');
-  fadeOut.textContent = C.mix === 0 ? 'Outline' : C.mix === 100 ? 'Drawing' : C.mix + '%';
-  fade.setAttribute('aria-valuetext', C.mix === 0 ? 'outline only' : C.mix === 100 ? 'drawing only' : C.mix + ' percent drawing');
-  pressed(document.querySelectorAll('#moveSeg button'), function(b){ return b.dataset.v === C.move; });
+  fade.setAttribute('aria-valuetext', mixText());
+  ctools.move.classList.toggle('on', C.move === 'drawing');
+  ctools.move.setAttribute('aria-pressed', String(C.move === 'drawing'));
+  ctools.move.disabled = !d;
   ctools.open.disabled = !on;
   ctools.match.disabled = !d || C.matching;
   ctools.frame.disabled = !d;
   ctools.frame.classList.toggle('on', d && C.frameOn);
-  ['grid','rotate','mirror','peek'].forEach(function(k){ ctools[k].disabled = !on; });
+  ['grid','rotate','mirror'].forEach(function(k){ ctools[k].disabled = !on; });
   ctools.save.disabled = !d;
   if(!d && !C.matching) setStatus(on ? 'Add a photo of your drawing to check it.' : 'Open a reference first.');
   stage.style.cursor = (MODE === 'check' && d && C.move === 'drawing') ? 'move' : '';
+}
+function mixText(){
+  var b = blendFor(C.line, C.mix/100);
+  if(C.line === 'edges') return C.mix <= 2 ? 'reference edges alone' : C.mix >= 98 ? 'drawing edges alone' : 'both sets of edges';
+  if(C.mix <= 2) return 'reference alone';
+  if(C.mix >= 98) return 'drawing alone';
+  if(b.mix < 0.005) return 'reference with the line';
+  return Math.round(b.mix*100) + ' percent drawing' + (b.lineA > 0.5 && C.line !== 'off' ? ', with the line' : '');
 }
 
 function checkRefTex(){ return C.squint ? squintTexture() : texture; }
@@ -233,12 +270,86 @@ function paintCheck(){
   sizeCanvas();
   var w = canvas.width, h = canvas.height, M = viewToRef(w, h);
   var dpr = w / Math.max(1, stage.clientWidth);
-  // Peek (comparing) shows the reference alone: no outline, no drawing.
+  // Peek (hold on the picture, or Space) shows the reference alone: no line, no drawing.
   drawCheck(null, w, h, {
-    toRef:M, mode:0, refTex:checkRefTex(), mix:comparing ? 0 : C.mix/100, showLine:!comparing, frameOn:C.frameOn,
+    toRef:M, mode:0, refTex:checkRefTex(), blend:comparing ? PEEK_BLEND : null, frameOn:C.frameOn,
     pxPerR:pxPerR(w, h), unit:dpr
   });
   drawOverlay(M);
+  syncDriftTag();
+}
+
+// ---------- Drift: arrows where a region of the drawing would have to move to sit on the
+// reference, and a score (Compare's proportion map, measured by the worker).
+// Only a region that clearly fits better moved counts, and only a drift of 0.6% of the figure's
+// size or more gets an arrow. Arrows are drawn at least minLen long so their direction shows.
+var DRIFT_RED = '#e5484d';
+function driftFresh(){
+  var a = C.analysis, P = C.P;
+  if(!a || !P || !a.P) return false;
+  return Math.abs(a.P.scale - P.scale) <= 1e-4*P.scale && Math.abs(a.P.theta - P.theta) < 1e-4 &&
+    Math.abs(a.P.tx - P.tx) < 0.05 && Math.abs(a.P.ty - P.ty) < 0.05;
+}
+function driftCells(){
+  return C.analysis.cells.filter(function(c){ return c.reliable && c.errorPct >= 0.6; });
+}
+function drawArrows(ctx, toXY, lw, minLen){
+  driftCells().forEach(function(c){
+    var a = toXY(c.x, c.y), b = toXY(c.x + c.dx, c.y + c.dy);
+    var dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+    if(l < minLen){ b = [a[0] + dx/l*minLen, a[1] + dy/l*minLen]; }
+    arrow(ctx, a[0], a[1], b[0], b[1], lw, DRIFT_RED);
+  });
+}
+function arrow(ctx, x0, y0, x1, y1, lw, color){
+  ctx.save();
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(255,255,255,0.9)'; ctx.shadowBlur = lw*1.5;
+  ctx.beginPath(); ctx.arc(x0, y0, lw*1.4, 0, 2*Math.PI); ctx.fill();
+  var a = Math.atan2(y1 - y0, x1 - x0), hl = lw*4;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - hl*0.6*Math.cos(a), y1 - hl*0.6*Math.sin(a)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - hl*Math.cos(a - 0.45), y1 - hl*Math.sin(a - 0.45));
+  ctx.lineTo(x1 - hl*Math.cos(a + 0.45), y1 - hl*Math.sin(a + 0.45));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function driftText(){
+  if(!C.drift || !C.has || !C.P) return '';
+  if(!driftFresh()) return (C.anJob || C.matching || C.anim) ? 'Measuring drift…' : '';
+  var a = C.analysis;
+  if(a.score == null) return 'No drift score: too few lines agree';
+  var n = driftCells().length;
+  return 'Score ' + a.score + ' · drift ' + a.rmsPct.toFixed(1) + '%' + (n ? '' : ' · no arrows');
+}
+function syncDriftTag(){
+  var t = MODE === 'check' && !comparing ? driftText() : '';
+  var el = $('driftTag');
+  if(t) el.textContent = t;
+  el.classList.toggle('show', !!t);
+}
+function requestDrift(P){
+  P = P || C.P;
+  if(!C.has || !P || !hasImage) return;
+  var w = getWorker();
+  if(!w) return;
+  ensureData(w);
+  C.anJob = ++jobSeq;
+  w.postMessage({ type:'analyze', id:C.anJob, P:copyP(P) });
+}
+var driftTimer = null;
+function scheduleDrift(){
+  clearTimeout(driftTimer);
+  if(!C.drift) return;
+  driftTimer = setTimeout(function(){ if(!C.matching && !driftFresh()) requestDrift(); }, 400);
+}
+function setDrift(on){
+  C.drift = on; store('drift', on ? '1' : '0');
+  // The Drift view is Outline with the arrows: turning Drift on in Outline names it Drift, and off, Outline again.
+  if(on && C.view === 'outline') setView('drift', true);
+  else if(!on && C.view === 'drift') setView('outline', true);
+  if(on && !driftFresh() && !C.matching) requestDrift();
+  syncUI(); paint();
 }
 
 // ---------- Overlay: the frame, and the drawing's box with its rotate handle
@@ -287,6 +398,9 @@ function drawOverlay(M){
       var m = [(a[0] + nx[0])/2, (a[1] + nx[1])/2];
       twice(function(){ seg(towards(m, a, 9), towards(m, nx, 9)); }, 4);
     }
+  }
+  if(C.drift && !comparing && driftFresh()){
+    drawArrows(ctx, function(x, y){ var q = m3apply(Mi, x/C.rw, 1 - y/C.rh); return [q[0]*stage.clientWidth, (1 - q[1])*stage.clientHeight]; }, 2.5, 20);
   }
   if(showHandle()){
     var g = handleGeom(Mi);
@@ -409,7 +523,7 @@ function getWorker(){
   sent.ref = sent.draw = false;
   return worker;
 }
-function killWorker(){ if(worker){ worker.terminate(); worker = null; } }
+function killWorker(){ if(worker){ worker.terminate(); worker = null; } C.anJob = 0; }
 function ensureData(w){
   if(!sent.ref && C.refData){ w.postMessage({ type:'reference', img:C.refData }); sent.ref = true; }
   if(!sent.draw && C.drawData){ w.postMessage({ type:'drawing', img:C.drawData }); sent.draw = true; }
@@ -444,7 +558,8 @@ function requestMask(which){
   if(!w) return;
   ensureData(w);
   C.maskJobs[which] = ++jobSeq;
-  w.postMessage({ type:'mask', id:C.maskJobs[which], which:which, maxSide:TUNE.edgeSide, opts:maskOpts() });
+  var side = Math.min(TUNE.edgeSide, (gl && !glLost) ? gl.getParameter(gl.MAX_TEXTURE_SIZE) : 2048);
+  w.postMessage({ type:'mask', id:C.maskJobs[which], which:which, maxSide:side, opts:maskOpts() });
 }
 function setMask(which, m){
   if(maskGL[which] && gl && !glLost) freeMask(maskGL[which]);
@@ -486,6 +601,14 @@ function onWorker(e){
     paint();
     return;
   }
+  if(m.type === 'analyze'){
+    if(m.id !== C.anJob) return;
+    C.anJob = 0;
+    C.analysis = m.error ? null : { P:m.P, cells:m.cells, score:m.score, rmsPct:m.rmsPct };
+    paint();
+    if(viewsOpen) buildViews();
+    return;
+  }
   if(m.id !== C.job) return;
   C.matching = false;
   if(m.error){
@@ -497,13 +620,14 @@ function onWorker(e){
   // than the automatic match (the drawing was moved far off), go back to the match.
   if(m.type === 'refine' && C.auto && C.autoCost != null && m.cost > C.autoCost*1.15){
     C.moved = false;
-    animateTo(C.auto);
+    animateTo(C.auto); requestDrift(C.auto);
     setStatus('Back to the automatic match: it fits better than the nearest fit from there.');
     syncUI(); return;
   }
   C.auto = copyP(m.P); C.autoCost = m.cost; C.moved = false;
   if(m.type === 'match' || !C.frame) suggestFrame(m.P);
   animateTo(m.P);
+  requestDrift(m.P);    // always, so Drift and the Views sheet have it ready
   var msg = m.type === 'refine' ? 'Snapped to the nearest fit.' : 'Lined up in ' + (m.timeMs/1000).toFixed(1) + ' s.';
   var btn = null;
   if(m.quality != null && m.quality < 0.3){
@@ -526,6 +650,7 @@ statusBtn.addEventListener('click', function(){
 function afterHandMove(){
   if(C.matching) return;
   setStatus('Moved by hand. Match snaps it to the nearest fit.');
+  scheduleDrift();
   syncUI();
 }
 
@@ -540,8 +665,9 @@ function setCheckReference(p){
   var d = ctx.getImageData(0, 0, w, h);
   C.rw = w; C.rh = h; C.refData = { width:w, height:h, data:d.data };
   sent.ref = false;
-  C.frame = null;
+  C.frame = null; C.analysis = null;
   setMask('ref', null);
+  if(C.squint) valuesLook(false);
   if(C.has){
     C.P = guessPlacement(); C.auto = null; C.moved = false;
     startMatch('match');
@@ -567,7 +693,7 @@ function loadDrawing(source, name){
   C.drawData = { width:w, height:h, data:d.data };
   sent.draw = false;
   uploadDraw();
-  C.has = true; C.auto = null; C.box = null; C.moved = false; C.frame = null; C.anim = null;
+  C.has = true; C.auto = null; C.box = null; C.moved = false; C.frame = null; C.anim = null; C.analysis = null;
   setMask('draw', null);
   C.P = guessPlacement();
   if(MODE !== 'check') setMode('check');
@@ -578,28 +704,93 @@ function loadDrawing(source, name){
 }
 
 // ---------- Check controls
-// Squint shows the reference with Reference Squint's look. If that look is still
+// Values shows the reference with Reference Squint's look. If that look is still
 // plain, there'd be nothing to see, so it starts from Three values.
-$('showSquint').addEventListener('click', function(){
-  C.squint = !C.squint;
-  if(C.squint && S.blur === 0 && S.n < 2 && S.color === 'full'){
-    applyLook(LOOKS[4]);
-    toast('Squint uses Reference Squint’s look, set to three values. Change it on that tab.', 4200);
-  }
+function lookPlain(){ return S.blur === 0 && S.n < 2 && S.color === 'full'; }
+function valuesLook(tell){
+  if(!lookPlain()) return;
+  applyLook(LOOKS[4]);
+  if(tell) toast('Values uses Reference Squint’s look, set to three values. Change it on that tab.', 4200);
+}
+// keepMix: switching between Outline and Drift with the Drift button leaves the slider where it is.
+function setView(id, keepMix){
+  if(!VIEWS[id]) return;
+  C.view = id; store('view', id); viewFields();
+  var V = VIEWS[id];
+  if(!keepMix){ C.mix = V.mix; store('mix', C.mix); }
+  if(V.drift && !C.drift){ C.drift = true; store('drift', '1'); if(!driftFresh() && !C.matching) requestDrift(); }
+  if(C.squint) valuesLook(true);
+  syncUI(); paint();
+}
+$('viewBtn').addEventListener('click', function(){ viewsOpen ? closeViews() : openViews(); });
+$('driftChip').addEventListener('click', function(){ setDrift(!C.drift); });
+fade.addEventListener('input', function(){ C.mix = Number(fade.value); store('mix', C.mix); syncUI(); paint(); });
+ctools.move.addEventListener('click', function(){
+  C.move = C.move === 'drawing' ? 'view' : 'drawing';
+  toast(C.move === 'drawing' ? 'Move drawing on: drags move the drawing.' : 'Move drawing off: drags move the view.', 2200);
   syncUI(); paint();
 });
-$('showColor').addEventListener('click', function(){
-  C.color = !C.color; store('lineColor', C.color ? '1' : '0'); syncUI(); paint();
-});
-function cycleLine(){
-  C.line = LINE_ORDER[(LINE_ORDER.indexOf(C.line) + 1) % LINE_ORDER.length];
-  store('line', C.line); syncUI(); paint();
+
+// ---------- The Views sheet: each view as a small picture of this pair, like Looks
+var viewsOpen = false, viewsEl = $('views'), viewGrid = $('viewGrid');
+function openViews(){
+  if(!hasImage || !C.has) return;
+  if(looksOpen) closeLooks();
+  viewsOpen = true; viewsEl.classList.add('open');
+  syncUI();
+  requestAnimationFrame(buildViews);
 }
-$('showLine').addEventListener('click', cycleLine);
-fade.addEventListener('input', function(){ C.mix = Number(fade.value); store('mix', C.mix); syncUI(); paint(); });
-Array.prototype.forEach.call(document.querySelectorAll('#moveSeg button'), function(b){
-  b.addEventListener('click', function(){ C.move = b.dataset.v; syncUI(); paint(); });
-});
+function closeViews(){
+  viewsOpen = false; viewsEl.classList.remove('open');
+  syncUI(); paint();
+}
+$('viewsClose').addEventListener('click', closeViews);
+// The region the cards show: the frame, or the whole reference, at most 1.4 times as tall as wide.
+function thumbRegion(w){
+  var f = (C.frameOn && C.frame) ? C.frame : { x0:0, y0:0, x1:C.rw, y1:C.rh };
+  var fw = f.x1 - f.x0, fh = f.y1 - f.y0, k = w/fw, h = Math.round(fh*k);
+  if(h > 1.4*w){ h = Math.round(1.4*w); var c = (f.y0 + f.y1)/2; fh = h/k; f = { x0:f.x0, x1:f.x1, y0:c - fh/2, y1:c + fh/2 }; }
+  return { f:f, k:k, w:w, h:Math.max(24, h) };
+}
+// The reference as Values shows it. If Reference Squint's look is still plain, the card
+// shows Three values, which is what choosing Values would set.
+function valuesTex(){
+  if(!lookPlain()) return { tex:squintTexture(), tmp:null };
+  var p = LOOKS[4], hh = histFor(p.blur), th = fitThresholds(hh, p.n);
+  var k = Math.min(1, 512/Math.max(imgW, imgH)), fb = makeFBO(Math.max(1, Math.round(imgW*k)), Math.max(1, Math.round(imgH*k)));
+  drawMain({ rotation:0, flipX:1, chroma:CHROMA[p.color], zoom:1, panX:0, panY:0, n:p.n, th:th,
+             tones:tonesFor(p.n, th, hh, S.tones), iso:-1, grid:0, bg:surroundRGB() }, runBlur(blurPx(p.blur)), fb.fbo, fb.w, fb.h, 1);
+  return { tex:fb.tex, tmp:fb };
+}
+function buildViews(){
+  if(!viewsOpen || !gl || glLost || !C.has || !C.P) return;
+  viewGrid.innerHTML = '';
+  var dpr = Math.min(window.devicePixelRatio || 1, 2), T = thumbRegion(Math.round(150*dpr));
+  var f = T.f, M = [(f.x1 - f.x0)/C.rw, 0, f.x0/C.rw, 0, (f.y1 - f.y0)/C.rh, 1 - f.y1/C.rh, 0, 0, 1];
+  var vt = null;
+  VIEW_ORDER.forEach(function(id){
+    var V = VIEWS[id], refTex = texture;
+    if(V.squint){ vt = vt || valuesTex(); refTex = vt.tex; }
+    var cv = renderCheck(T.w, T.h, { toRef:M, mode:0, refTex:refTex, blend:blendFor(V.line, V.mix/100), line:V.line,
+      color:V.ink === 'color', frameOn:false, pxPerR:T.k, unit:0.7*dpr });
+    if(V.drift && driftFresh()){
+      var ctx = cv.getContext('2d');
+      drawArrows(ctx, function(x, y){ return [(x - f.x0)*T.k, (y - f.y0)*T.k]; }, 2*dpr, 10*dpr);
+    }
+    var card = document.createElement('button');
+    card.type = 'button'; card.className = 'look' + (id === C.view ? ' current' : '');
+    card.setAttribute('aria-pressed', String(id === C.view));
+    card.appendChild(cv);
+    var n = document.createElement('span'); n.className = 'ln'; n.textContent = V.name;
+    var d = document.createElement('span'); d.className = 'ld'; d.textContent = V.desc;
+    card.appendChild(n); card.appendChild(d);
+    card.addEventListener('click', function(){ setView(id); closeViews(); });
+    viewGrid.appendChild(card);
+  });
+  if(vt && vt.tmp) killFBO(vt.tmp);
+  paint();
+}
+
 ctools.open.addEventListener('click', function(){ drawInput.click(); });
 ctools.match.addEventListener('click', function(){
   if(!C.has) return;
@@ -614,12 +805,12 @@ ctools.grid.addEventListener('click', cycleGrid);
 ctools.rotate.addEventListener('click', function(){ rotate(1); });
 ctools.mirror.addEventListener('click', toggleMirror);
 ctools.save.addEventListener('click', openSave);
-holdButton(ctools.peek);
 
 // ---------- Saving: the outline on the reference, or the two side by side
 var saveOpen = false;
 function openSave(){
   if(!C.has || !C.P) return;
+  $('saveOverlayNote').textContent = 'The ' + curView().name + ' view as it is now' + (C.drift && driftFresh() ? ', with the drift arrows' : '') + ', without the dimming';
   $('saveNote').textContent = (C.frameOn && C.frame) ? 'Saves what’s inside the frame.' : 'Saves the whole reference. Turn on Frame to save part of it.';
   saveOpen = true; saveSheet.classList.add('open');
   $('saveOverlay').focus();
@@ -645,11 +836,14 @@ function exportCheck(kind){
   var M = [fw/C.rw, 0, f.x0/C.rw, 0, fh/C.rh, 1 - f.y1/C.rh, 0, 0, 1];   // output uv -> reference uv
   var grow = Math.max(1, Math.max(w, h)/800);
   function opts(mode){
-    return { toRef:M, mode:mode, refTex:checkRefTex(), mix:C.mix/100, showLine:true, frameOn:false,
-             pxPerR:k, unit:grow, bg:[1,1,1] };
+    return { toRef:M, mode:mode, refTex:checkRefTex(), frameOn:false, pxPerR:k, unit:grow, bg:[1,1,1] };
   }
   var cv;
-  if(kind === 'overlay') cv = renderCheck(w, h, opts(0));
+  if(kind === 'overlay'){
+    // What you see: the view, the slider, the grid, and the drift arrows if they're on.
+    cv = renderCheck(w, h, opts(0));
+    if(C.drift && driftFresh()) drawArrows(cv.getContext('2d'), function(x, y){ return [(x - f.x0)*k, (y - f.y0)*k]; }, 2.5*grow, 20*grow);
+  }
   else {
     var a = renderCheck(w, h, opts(2)), b = renderCheck(w, h, opts(1));
     var gap = Math.round(Math.max(w, h)*0.02);

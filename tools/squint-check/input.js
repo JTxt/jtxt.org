@@ -82,8 +82,8 @@ function stepDrag(e){
 
 stage.addEventListener('pointerdown', function(e){
   lastPtr = e.pointerType || 'mouse';
-  if(!hasImage || looksOpen || saveOpen) return;
-  if(e.target.closest && e.target.closest('.empty, #looks')) return;
+  if(!hasImage || looksOpen || viewsOpen || saveOpen) return;
+  if(e.target.closest && e.target.closest('.empty, .fullsheet')) return;
   if(e.pointerType === 'mouse' && e.button !== 0) return;
   pointers[e.pointerId] = { x:e.clientX, y:e.clientY };
   try { stage.setPointerCapture(e.pointerId); } catch(err){}
@@ -145,7 +145,7 @@ function stageUp(e){
   clearTimeout(holdTimer);
   var was = drag; drag = null;
   if(held){ setComparing(false); }
-  else if(!moved && !panning && hasImage && !looksOpen && e.type === 'pointerup'){
+  else if(!moved && !panning && hasImage && !looksOpen && !viewsOpen && e.type === 'pointerup'){
     var now = Date.now();
     var isDouble = now - lastTap.t < 320 && Math.abs(downX - lastTap.x) < 24 && Math.abs(downY - lastTap.y) < 24;
     if(MODE === 'squint'){
@@ -280,10 +280,10 @@ window.addEventListener('keydown', function(e){
   if(tag === 'INPUT' && ae.type !== 'range') return;
   var k = e.key.toLowerCase();
   if(k === 'escape'){
-    if(saveOpen) closeSave(); else if(looksOpen) closeLooks(); else if(S.iso >= 0) setIso(-1);
+    if(saveOpen) closeSave(); else if(looksOpen) closeLooks(); else if(viewsOpen) closeViews(); else if(S.iso >= 0) setIso(-1);
     return;
   }
-  if(saveOpen || looksOpen && k !== 'l') return;
+  if(saveOpen || (looksOpen || viewsOpen) && k !== 'l' && k !== 'v') return;
   if(e.key === ' ' && hasImage && !e.repeat && tag !== 'BUTTON'){ setComparing(true); e.preventDefault(); return; }
   if(!hasImage){ if(k === 'o') fileInput.click(); return; }
   var common = { 'r':function(){ rotate(1); }, 'm':toggleMirror, 'f':resetView,
@@ -297,7 +297,8 @@ window.addEventListener('keydown', function(e){
       case 'o': drawInput.click(); break;
       case 's': openSave(); break;
       case 'g': cycleGrid(); break;
-      case 'l': cycleLine(); break;
+      case 'l': case 'v': viewsOpen ? closeViews() : openViews(); break;
+      case 'd': if(C.has) setDrift(!C.drift); break;
       case '[': if(C.has && C.P){ stopAnim(); transformAbout(boxCenterR(), 1, -0.5*Math.PI/180, 0, 0); C.moved = true; paint(); afterHandMove(); } break;
       case ']': if(C.has && C.P){ stopAnim(); transformAbout(boxCenterR(), 1, 0.5*Math.PI/180, 0, 0); C.moved = true; paint(); afterHandMove(); } break;
       case 'arrowleft': case 'arrowright': case 'arrowup': case 'arrowdown':

@@ -65,7 +65,7 @@ function initGL(){
   GU = uniforms(gaussProg, ['u_src','u_texel','u_region','u_srcMax','u_dir','u_radius']);
   CU = uniforms(checkProg, ['u_ref','u_draw','u_dMask','u_dRaw','u_rMask','u_toRef','u_refToDraw','u_bg','u_mode','u_mix',
     'u_hasDraw','u_hasLine','u_style','u_rHas','u_dLine','u_rLine','u_dTexel','u_rTexel','u_ink','u_haloC',
-    'u_frame','u_frameOn','u_grid','u_gridPx','u_edges','u_eBg','u_eRef','u_eDraw','u_look','u_eBase']);
+    'u_frame','u_frameOn','u_grid','u_gridPx','u_edges','u_eBg','u_eRef','u_eDraw','u_look','u_eBase','u_lineA','u_rEdgeA']);
   MU = uniforms(maskProg, ['u_src','u_step','u_sigma','u_scale']);
   quad = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, quad);

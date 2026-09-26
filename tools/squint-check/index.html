@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tagesschrift&family=Atkinson+Hyperlegible+Next:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=11">
 <!-- Dark mode set to On or Off in Looks, applied before the page draws so it doesn't flash. -->
 <script>try{var t=localStorage.getItem('squintcheck.theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 </head>
@@ -26,6 +26,7 @@
     </div>
     <div id="beforeTag" class="tag">Before</div>
     <div id="zoomTag" class="tag">100%</div>
+    <div id="driftTag" class="tag" aria-live="polite"></div>
 
     <div id="empty" class="empty">
       <div class="welcome">
@@ -162,9 +163,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18" stroke-dasharray="2.5 3"/><path d="M9 7.5L4.5 12 9 16.5z" fill="currentColor"/><path d="M15 7.5L19.5 12 15 16.5z"/></svg>
           <span>Mirror</span>
         </button>
-        <button class="tool hold" type="button" data-c="peek" aria-label="Hold to see the reference alone">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>
-          <span>Peek</span>
+        <button class="tool" type="button" data-c="move" aria-pressed="false" title="Move drawing. On: drags, pinches and the wheel move the drawing. Off: they move the view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><path d="M9.5 5.5L12 3l2.5 2.5M9.5 18.5L12 21l2.5-2.5M5.5 9.5L3 12l2.5 2.5M18.5 9.5L21 12l-2.5 2.5"/></svg>
+          <span>Move</span>
         </button>
         <button class="tool" type="button" data-c="save">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
@@ -174,26 +175,18 @@
 
       <div class="rows">
         <div class="row">
-          <span class="lbl" id="showLbl">Show</span>
-          <div class="chips" id="showChips" role="group" aria-labelledby="showLbl">
-            <button class="chip" type="button" id="showSquint" title="Show the reference the way Reference Squint does">Squint</button>
-            <button class="chip" type="button" id="showColor" title="A blue outline instead of the neutral one">Color</button>
-            <button class="chip" type="button" id="showLine" title="How the drawing shows: Outline, Edges (both pictures as their edges), Soft, Tint (like Compare), or no line">Outline</button>
-          </div>
+          <span class="lbl" id="viewLbl">View</span>
+          <button class="viewpick" type="button" id="viewBtn" aria-haspopup="dialog" aria-describedby="viewLbl" title="Choose how the drawing shows over the reference">
+            <span id="viewName">Outline</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg>
+          </button>
+          <button class="chip drift" type="button" id="driftChip" aria-pressed="false" title="Arrows where the drawing drifted from the reference, and a score, over any view">Drift</button>
         </div>
 
         <div class="row">
-          <label class="lbl" for="fade">Fade</label>
-          <input type="range" id="fade" min="0" max="100" step="1" value="0" title="Fade the outline out and your drawing in">
-          <output id="fadeOut" for="fade">Outline</output>
-        </div>
-
-        <div class="row">
-          <span class="lbl" id="moveLbl">Move</span>
-          <div class="seg grow accent" id="moveSeg" role="group" aria-labelledby="moveLbl">
-            <button type="button" data-v="view" title="Drag, pinch and wheel move the view">View</button>
-            <button type="button" data-v="drawing" title="Drag, pinch, wheel and twist move the drawing">Drawing</button>
-          </div>
+          <label class="lbl" for="fade">Ref</label>
+          <input type="range" id="fade" min="0" max="100" step="1" value="15" title="Left: the reference alone. Right: your drawing alone. The view's line stays on top in between">
+          <output id="fadeOut" for="fade">Drawing</output>
         </div>
 
         <div class="row status-row">
@@ -205,13 +198,13 @@
   </aside>
 </div>
 
-  <div id="looks" role="dialog" aria-label="Looks">
-    <div id="looksHead">
+  <div id="looks" class="fullsheet" role="dialog" aria-label="Looks">
+    <div id="looksHead" class="fs-head">
       <h2>Looks</h2>
-      <button id="looksClose" type="button">Done</button>
+      <button id="looksClose" class="fs-close" type="button">Done</button>
     </div>
-    <div id="looksBody">
-      <div id="lookGrid"></div>
+    <div id="looksBody" class="fs-body">
+      <div id="lookGrid" class="card-grid"></div>
       <div class="settings">
         <div>
           <h3>Boundaries</h3>
@@ -252,10 +245,21 @@
     </div>
   </div>
 
+  <div id="views" class="fullsheet" role="dialog" aria-label="Views">
+    <div id="viewsHead" class="fs-head">
+      <h2>Views</h2>
+      <button id="viewsClose" class="fs-close" type="button">Done</button>
+    </div>
+    <div id="viewsBody" class="fs-body">
+      <div id="viewGrid" class="card-grid"></div>
+      <p class="small fs-note">The slider under View crosses from the reference alone to your drawing alone. Drift adds its arrows and score to any view.</p>
+    </div>
+  </div>
+
   <div id="saveSheet" role="dialog" aria-label="Save">
     <div class="sheet-card">
       <h2>Save</h2>
-      <button class="btn primary" id="saveOverlay" type="button">Outline on the reference<small>What you see now, without the dimming</small></button>
+      <button class="btn primary" id="saveOverlay" type="button">What you see<small id="saveOverlayNote">The view as it is now, without the dimming</small></button>
       <button class="btn quiet" id="saveSide" type="button">Side by side<small>Reference and drawing, lined up at the same size</small></button>
       <p class="small" id="saveNote">Saves what’s inside the frame.</p>
       <button class="textbtn" id="saveCancel" type="button">Cancel</button>
@@ -270,14 +274,14 @@
      GitHub Pages lets a browser keep each file for 10 minutes, so without it a visit right
      after a push can run new scripts with an old cached worker, and no lines come back.
      The worker and match.js take their ?v= from check.js's. -->
-<script src="sample-pair.js?v=9"></script>
-<script src="shaders.js?v=9"></script>
-<script src="core.js?v=9"></script>
-<script src="gl.js?v=9"></script>
-<script src="squint.js?v=9"></script>
-<script src="check.js?v=9"></script>
-<script src="input.js?v=9"></script>
-<script src="debug.js?v=9"></script>
-<script src="main.js?v=9"></script>
+<script src="sample-pair.js?v=11"></script>
+<script src="shaders.js?v=11"></script>
+<script src="core.js?v=11"></script>
+<script src="gl.js?v=11"></script>
+<script src="squint.js?v=11"></script>
+<script src="check.js?v=11"></script>
+<script src="input.js?v=11"></script>
+<script src="debug.js?v=11"></script>
+<script src="main.js?v=11"></script>
 </body>
 </html>

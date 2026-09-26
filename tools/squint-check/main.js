@@ -44,8 +44,11 @@ requestAnimationFrame(drawStrip);
 
 // For testing in a browser console: window.__sc.state()
 window.__sc = { state:function(){ return { mode:MODE, hasImage:hasImage, view:view, C:{ has:C.has, P:C.P, auto:C.auto, moved:C.moved, frame:C.frame, frameOn:C.frameOn, matching:C.matching, status:C.status, box:C.box, line:C.line,
+    view:C.view, mix:C.mix, drift:C.drift, move:C.move, driftFresh:driftFresh(), driftTag:driftText(),
+    analysis:C.analysis && { score:C.analysis.score, rmsPct:C.analysis.rmsPct, cells:C.analysis.cells.length, arrows:driftCells().length },
     mask:{ ref:C.mask.ref && { w:C.mask.ref.w, h:C.mask.ref.h, edges:C.mask.ref.edges }, draw:C.mask.draw && { w:C.mask.draw.w, h:C.mask.draw.h, edges:C.mask.draw.edges } } }, S:{ n:S.n, th:S.th, shift:S.shift, split:S.split } }; },
-  loadPair:loadPair, setMode:setMode, loadDrawing:loadDrawing, refSize:function(){ return [C.rw, C.rh]; },
+  loadPair:loadPair, setMode:setMode, setView:setView, setDrift:setDrift, openViews:openViews, closeViews:closeViews,
+  setMix:function(v){ fade.value = v; fade.dispatchEvent(new Event('input')); }, loadDrawing:loadDrawing, refSize:function(){ return [C.rw, C.rh]; },
   // Client coordinates of the rotate handle and the frame's corners, for scripted pointer tests.
   handle:function(){ var r = stage.getBoundingClientRect(), g = handleGeom(m3inv(viewToRef(canvas.width, canvas.height))); return [r.left + g.handle[0], r.top + g.handle[1]]; },
   frame:function(){ var r = stage.getBoundingClientRect(); return frameScreen(m3inv(viewToRef(canvas.width, canvas.height))).map(function(p){ return [r.left + p[0], r.top + p[1]]; }); } };

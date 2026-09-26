@@ -7,6 +7,8 @@
  *   { type:'mask', id, which, maxSide, opts }          'ref' or 'draw': the picture's edges and lines (and the drawing's ink) as a mask
  *   { type:'match', id, rotationRange }                full search
  *   { type:'refine', id, P }                           snap from a placement {scale, theta, tx, ty}
+ *   { type:'analyze', id, P }                          drift: for each region of the drawing, where it would
+ *                                                      have to move to sit on the reference, and a score
  * Every reply carries the same type and id, plus `error` if it failed.
  *
  * co-authors: jtxt.org and claude opus 5.5
@@ -40,6 +42,16 @@ self.onmessage = function (e) {
         box: prep.boxB ? { x0: prep.boxB.x0, y0: prep.boxB.y0, x1: prep.boxB.x1, y1: prep.boxB.y1 } : null
       });
     }
+    else if (m.type === 'analyze') {
+      if (!refImg || !drawImg) { throw new Error('Add both a reference and a drawing first'); }
+      var t1 = Date.now();
+      if (!prep) { prep = ImageMatch.prepare(refImg, drawImg, { rotationRange: 30 }); }
+      var an = ImageMatch.analyze(prep, m.P);
+      self.postMessage({
+        type: 'analyze', id: m.id, timeMs: Date.now() - t1, P: m.P,
+        cells: an.cells, score: an.proportionScore, rmsPct: an.rmsErrorPct, quality: an.matchQuality
+      });
+    }
   } catch (err) {
     self.postMessage({ type: m.type, id: m.id, error: String((err && err.message) || err) });
   }
@@ -71,7 +83,9 @@ function now() { return (self.performance && performance.now) ? performance.now(
 //      the paper, ramping in from 0.05 over 0.35 (Soft and Tint; 0 on the reference)
 //   A  how much the mark shows (255 fully): R over A, blurred, is its alpha
 function mask(img, maxSide, withInk, o) {
-  var W = img.width, H = img.height, k = Math.min(1, maxSide / Math.max(W, H));
+  // Pictures come in at up to 1600px. Only Debug's mask sizes above that make a mask bigger than the picture.
+  var W = img.width, H = img.height, k = maxSide / Math.max(W, H);
+  if (maxSide <= 1600) { k = Math.min(1, k); }
   var w = Math.max(8, Math.round(W * k)), h = Math.max(8, Math.round(H * k)), n = w * h, i;
   var t0 = now();
   var L = luminance(img.data, W, H, w, h);
@@ -248,6 +262,7 @@ function gauss(src, w, h, sigma) {
 
 // Area-averaged luminance at the working size. Transparent pixels read as white paper.
 function luminance(src, W, H, w, h) {
+  if (w > W || h > H) { return luminanceUp(src, W, H, w, h); }
   var out = new Float32Array(w * h), sx = W / w, sy = H / h, x, y;
   for (y = 0; y < h; y++) {
     var y0 = Math.floor(y * sy), y1 = Math.max(y0 + 1, Math.floor((y + 1) * sy));
@@ -262,6 +277,25 @@ function luminance(src, W, H, w, h) {
         }
       }
       out[y * w + x] = cnt ? acc / cnt : 1;
+    }
+  }
+  return out;
+}
+
+// A mask bigger than the picture (Debug's mask size above the picture's own size): lightness
+// read bilinearly, so the edges come out smooth and thinner lines, with no new detail.
+function luminanceUp(src, W, H, w, h) {
+  var out = new Float32Array(w * h), sx = W / w, sy = H / h, x, y;
+  function lum(xx, yy) {
+    var j = (yy * W + xx) * 4, a = src[j + 3] / 255;
+    return a * (0.2126 * src[j] + 0.7152 * src[j + 1] + 0.0722 * src[j + 2]) / 255 + (1 - a);
+  }
+  for (y = 0; y < h; y++) {
+    var fy = Math.min(H - 1, Math.max(0, (y + 0.5) * sy - 0.5)), y0 = Math.floor(fy), y1 = Math.min(H - 1, y0 + 1), ty = fy - y0;
+    for (x = 0; x < w; x++) {
+      var fx = Math.min(W - 1, Math.max(0, (x + 0.5) * sx - 0.5)), x0 = Math.floor(fx), x1 = Math.min(W - 1, x0 + 1), tx = fx - x0;
+      var top = lum(x0, y0) * (1 - tx) + lum(x1, y0) * tx, bot = lum(x0, y1) * (1 - tx) + lum(x1, y1) * tx;
+      out[y * w + x] = top * (1 - ty) + bot * ty;
     }
   }
   return out;
