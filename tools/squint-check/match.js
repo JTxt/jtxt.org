@@ -17,7 +17,8 @@
  * Images are {width, height, data}: RGBA bytes (like canvas ImageData) or one
  * gray value per pixel (bytes 0..255 or floats 0..1). Transparent pixels count as white paper.
  *
- * co-authors: James Thomas (jtxt.org) and Claude Opus 5.5 (Anthropic)
+ * Written mostly by Claude Opus 5.5 (Anthropic) to requirements, direction and
+ * testing by James Thomas (jtxt.org).
  *
  * Built on published methods (no code copied from them):
  *   - Hierarchical chamfer matching, the approach as a whole: G. Borgefors, "Hierarchical
