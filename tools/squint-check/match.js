@@ -17,7 +17,60 @@
  * Images are {width, height, data}: RGBA bytes (like canvas ImageData) or one
  * gray value per pixel (bytes 0..255 or floats 0..1). Transparent pixels count as white paper.
  *
- * co-authors: jtxt.org and claude opus 5.5
+ * co-authors: James Thomas (jtxt.org) and Claude Opus 5.5 (Anthropic)
+ *
+ * Built on published methods (no code copied from them):
+ *   - Hierarchical chamfer matching, the approach as a whole: G. Borgefors, "Hierarchical
+ *     Chamfer Matching: A Parametric Edge Matching Algorithm", IEEE PAMI 10(6), 1988.
+ *     https://doi.org/10.1109/34.9107
+ *   - Euclidean distance transform: P. Felzenszwalb and D. Huttenlocher, "Distance
+ *     Transforms of Sampled Functions", Theory of Computing 8, 2012.
+ *     https://theoryofcomputing.org/articles/v008a019/
+ *   - Oriented chamfer (edges match only edges of similar direction): J. Shotton, A. Blake
+ *     and R. Cipolla, "Multiscale Categorical Object Recognition Using Contour Fragments",
+ *     IEEE PAMI 30(7), 2008. https://doi.org/10.1109/TPAMI.2007.70772
+ *   - Edge finder, a simplified Canny: J. Canny, "A Computational Approach to Edge
+ *     Detection", IEEE PAMI 8(6), 1986. https://doi.org/10.1109/TPAMI.1986.4767851
+ *
+ * Adapted here for matching a hand drawing to its reference:
+ *   - Rotation, uniform scale and position only, never stretch or perspective, so the
+ *     drawing's proportion errors stay in it to be measured (analyze) instead of fitted away.
+ *   - Cost truncated at `tau`: a stray mark, a note, or a part not drawn yet can only cost
+ *     so much, never pull the fit.
+ *   - A reverse term (reference edges inside the drawing's area should be drawn), measured
+ *     in the drawing's own pixels, so shrinking the drawing to a speck never scores well.
+ *     Lower `reverseWeight` for unfinished drawings.
+ *   - Edges weighted toward strong contrast and long connected strokes; short pieces
+ *     (paper texture, specks) and edges at the image border dropped.
+ *   - The drawing cropped to its content first, so a small sketch on a big page keeps its detail.
+ *   - Three levels (72, 180, 480 px): an exhaustive coarse search over rotation, scale and
+ *     position, nearest the first guess first, with a shortlist per scale band so a wrong
+ *     size can't crowd out the right one, and early exit from poses that can't win.
+ *     The best few are then refined by compass search (derivative-free) on the finer levels.
+ *   - Snap from a hand placement (refine), and a result that reports its quality (share of
+ *     edges on target) and ambiguity (best vs. next distinct fit).
+ *
+ * MIT License
+ *
+ * Copyright (c) 2026 James Thomas (jtxt.org)
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 (function (root, factory) {
   var api = factory();
@@ -142,6 +195,8 @@
 
   /* ----------------------------------------------------------------- edges */
 
+  // A simplified Canny edge finder (Canny, 1986): blur, Sobel gradient, non-maximum
+  // suppression; one threshold plus a length filter instead of hysteresis.
   // Returns thin, de-noised edges. Each edge pixel carries a weight that favours
   // strong contrast and long connected strokes, so the strongest structure wins.
   function detectEdges(img, w, h, sigma, o) {
@@ -421,6 +476,7 @@
     return v < cap ? v : cap;
   }
 
+  // Oriented chamfer (Shotton et al., 2008) on Borgefors's chamfer distance (1988).
   // Truncated, direction-aware chamfer cost in [0, 1]. Truncation is what makes it
   // robust: a stray mark or missing part can only cost `tau`, never drag the fit.
   function poseCost(L, p, tau, lambda, bins) {
@@ -452,6 +508,7 @@
 
   /* ----------------------------------------------------------------- search */
 
+  // Coarse to fine, as in hierarchical chamfer matching (Borgefors, 1988).
   // Brute force over rotation x scale x position on the coarse level.
   // Poses closest to the initial guess go first; each scale band keeps its own
   // shortlist, and positions that cannot beat that shortlist are abandoned early.
