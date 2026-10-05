@@ -11,10 +11,10 @@ Free, no account, no ads. Images stay on your device; nothing is uploaded.
 
 | Tool | What it does |
 |---|---|
+| [Squint & Check](https://jtxt.org/tools/squint-check/) | Squint and Compare in one app: study a reference's values, then check a drawing against it |
 | [Squint](https://jtxt.org/tools/squint/) | Breaks a reference photo into a few value shapes, like squinting at it |
 | [Flicker](https://jtxt.org/tools/flicker/) | Lines up two images by hand and flips between them, to spot the differences |
 | [Compare](https://jtxt.org/tools/compare/) | Lines a drawing up on its reference by itself, with arrows where it drifts |
-| [Squint & Check](https://jtxt.org/tools/squint-check/) | Squint and Compare in one app (in progress) |
 
 To run a tool locally, serve the folder (the background workers won't start from a file):
 
