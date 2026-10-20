@@ -357,8 +357,10 @@ input[type=range]::-moz-range-thumb{
   .drawer-in{ background:var(--glass); padding:6px 10px 4px; }
   #toast{ bottom:calc(14px + var(--cover, 0px)); }
   /* Frosted glass: the panel blurs the picture under it, so the tools stay easy to read.
+     One blur for the whole panel, tabs and tools together, so there is no seam where they
+     meet (a blur on each part blurs each edge its own way); the parts paint only the tint.
      main.js turns it off (data-glass="off") on a device where it makes panning slow. */
-  #app:not([data-glass="off"]) #tabs button, #app:not([data-glass="off"]) .drawer-in{
+  #app:not([data-glass="off"]) #panel{
     -webkit-backdrop-filter:blur(var(--glass-blur)); backdrop-filter:blur(var(--glass-blur));
   }
 
