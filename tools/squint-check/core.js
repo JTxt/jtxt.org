@@ -236,6 +236,8 @@ function syncEmpty(){
   canvas.style.visibility = ov.style.visibility = hasImage ? '' : 'hidden';
   empty.classList.toggle('hidden', hasImage);
   emptyDraw.classList.toggle('hidden', !(hasImage && MODE === 'check' && !C.has));
+  // On a phone the tools stay down until this tab has its picture (style.css, .drawer).
+  app.dataset.tools = hasImage && (MODE !== 'check' || C.has) ? 'open' : 'closed';
   if(!exampleBtn.disabled) exampleBtn.textContent = MODE === 'check' ? 'Try the sample pair' : 'Try a sample image';
 }
 

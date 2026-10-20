@@ -15,7 +15,7 @@
 <script>try{var t=localStorage.getItem('squintcheck.theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 </head>
 <body>
-<div id="app" data-mode="squint">
+<div id="app" data-mode="squint" data-tools="closed">
 
   <main id="stage" aria-label="Picture">
     <canvas id="gl"></canvas>
@@ -62,10 +62,13 @@
   <aside id="panel">
     <div class="brand"><span class="wm">Squint &amp; Check</span><small>Value study and drawing check · <a href="/">jtxt.org</a></small></div>
 
-    <div class="seg accent" id="tabs" role="group" aria-label="Tab">
-      <button type="button" data-mode="squint"><span>Reference</span> Squint</button>
-      <button type="button" data-mode="check"><span>Drawing</span> Check</button>
+    <div id="tabs" role="group" aria-label="Tab">
+      <button type="button" data-mode="squint">Squint <span>at Reference</span></button>
+      <button type="button" data-mode="check">Check <span>Drawing</span></button>
     </div>
+
+    <!-- The tools: on a phone they slide down out of sight until this tab has its picture. -->
+    <div class="drawer"><div class="drawer-in">
 
     <!-- ============ Reference Squint ============ -->
     <section class="pane pane-squint" aria-label="Reference Squint">
@@ -196,6 +199,7 @@
         </div>
       </div>
     </section>
+    </div></div>
   </aside>
 </div>
 

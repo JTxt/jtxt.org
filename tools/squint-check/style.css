@@ -271,9 +271,24 @@ input[type=range]::-moz-range-thumb{
 .seg button[aria-pressed="true"]{ background:var(--panel); font-weight:700; box-shadow:0 1px 2px rgba(0,0,0,.18); }
 .seg.accent button[aria-pressed="true"]{ background:var(--accent); color:var(--on-accent); box-shadow:none; }
 
-#tabs button{ min-height:32px; font-size:16px; }
-#tabs button span{ font-weight:400; color:var(--muted); }
-#tabs button[aria-pressed="true"] span{ color:inherit; }
+/* Tabs: folder tabs. The open one is the panel's color and joins the panel below it. */
+#tabs{ display:flex; gap:4px; align-items:flex-end; border-bottom:1px solid var(--line); padding:0 6px; }
+#tabs button{
+  flex:1; min-width:0; min-height:38px; padding:0 8px; margin-bottom:-1px; cursor:pointer;
+  border:1px solid var(--line); border-bottom-color:var(--line); border-radius:10px 10px 0 0;
+  background:var(--chip); color:var(--muted); font-size:16px; font-weight:700; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+  box-shadow:inset 0 3px 0 transparent;
+}
+#tabs button span{ font-weight:400; }
+#tabs button[aria-pressed="true"]{
+  min-height:42px; background:var(--panel); color:var(--ink); border-bottom-color:var(--panel);
+  box-shadow:inset 0 3px 0 var(--accent);
+}
+
+/* The tools' drawer. Open everywhere but on a phone (see the phone rules below). */
+.drawer{ display:grid; grid-template-rows:1fr; transition:grid-template-rows .35s ease; }
+.drawer-in{ min-height:0; overflow:hidden; display:flex; flex-direction:column; gap:6px; }
 
 .status-row{ min-height:26px; }
 
@@ -310,6 +325,21 @@ input[type=range]::-moz-range-thumb{
 /* Both panes keep one height on a phone, so the picture doesn't jump between tabs. */
 @media (max-width: 879px){
   .pane .rows{ min-height:154px; }
+
+  /* The tabs sit on the page color above the panel, like folder tabs. */
+  #panel{ border-top:none; padding-top:0; }
+  #tabs{ background:var(--bg); margin:0 -10px; padding:6px 8px 0; }
+
+  /* Until this tab has its picture, only the tabs show; then the tools slide up. */
+  #app[data-tools="closed"] .drawer{ grid-template-rows:0fr; }
+  #app[data-tools="closed"] .drawer-in{ visibility:hidden; transition:visibility 0s .35s; }
+
+  /* The welcome card fills the stage, with no margin around it. */
+  .empty{ padding:0; }
+  .welcome{
+    max-width:none; min-height:100%; border-radius:0; box-shadow:none;
+    display:flex; flex-direction:column; justify-content:center;
+  }
 }
 
 /* ---------- Wide screens: side panel ---------- */

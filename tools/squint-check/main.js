@@ -9,7 +9,9 @@
 function onResize(){ sizeCanvas(); paint(); drawStrip(); }
 if('ResizeObserver' in window){
   var rt = null;
-  new ResizeObserver(function(){ clearTimeout(rt); rt = setTimeout(onResize, 60); }).observe(document.body);
+  // The stage, not only the body: it also changes size when the tools slide up or down.
+  var ro = new ResizeObserver(function(){ clearTimeout(rt); rt = setTimeout(onResize, 60); });
+  ro.observe(document.body); ro.observe(stage);
 } else window.addEventListener('resize', onResize);
 if(window.matchMedia){
   var mq = window.matchMedia('(prefers-color-scheme: dark)');
