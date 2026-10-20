@@ -285,7 +285,7 @@ input[type=range]::-moz-range-thumb{
 #tabs button{
   flex:1; min-width:0; min-height:38px; padding:0 8px; margin-bottom:-1px; cursor:pointer;
   border:1px solid var(--line); border-bottom-color:var(--line); border-radius:10px 10px 0 0;
-  background:var(--chip); color:var(--muted); font-size:16px; font-weight:700; white-space:nowrap;
+  background:var(--chip); color:var(--ink); font-size:16px; font-weight:700; white-space:nowrap;
   overflow:hidden; text-overflow:ellipsis;
   box-shadow:inset 0 3px 0 transparent;
 }
@@ -320,7 +320,7 @@ input[type=range]::-moz-range-thumb{
 .tool{
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
   border:none; background:none; cursor:pointer; min-height:52px; padding:1px 0; border-radius:10px;
-  color:var(--muted); min-width:0;
+  color:var(--ink); min-width:0;
 }
 .tool svg{ width:25px; height:25px; flex-shrink:0; }
 .tool span{ font-size:12.5px; line-height:1.3; font-weight:500; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -330,7 +330,10 @@ input[type=range]::-moz-range-thumb{
 .tool.hold.held{ background:var(--accent); color:var(--on-accent); }
 
 .fileInput{ display:none; }
-.tgroup{ display:none; }
+/* A link home at the foot of the Check tab, on a phone (a wide screen has it in the header). */
+.homelink{ margin-top:auto; text-align:center; padding-top:2px; }
+.homelink a{ color:var(--muted); }
+.homelink a:hover{ color:var(--accent); }
 /* Before this tab has its picture, Open is the next step: it takes the accent. */
 #app[data-tools="closed"] .tool[data-t="open"], #app[data-tools="closed"] .tool[data-c="open"]{ color:var(--accent); }
 #app[data-tools="closed"] .tool[data-t="open"] span, #app[data-tools="closed"] .tool[data-c="open"] span{ font-weight:700; }
@@ -374,6 +377,7 @@ input[type=range]::-moz-range-thumb{
 
 /* ---------- Wide screens: side panel ---------- */
 @media (min-width: 880px){
+  .homelink{ display:none; }
   /* The stage fills the window; the panel floats over its right side, frosted like the
      phone's. --cover-x is its width, set by sizeCanvas: the picture fits in the part of the
      stage it leaves. The panel blurs; its parts paint the tint: --glass-head on the header
@@ -431,13 +435,8 @@ input[type=range]::-moz-range-thumb{
   #app[data-tools="closed"] .pane-squint #strip{ height:28px; }
   #stripHint{ display:block; }
 
-  /* Tools: tiles in two labeled rows (Picture, then Study or Line up). */
+  /* Tools: tiles in two rows, picture tools first, then study or line-up tools. */
   .toolbar{ grid-template-columns:repeat(4, minmax(0,1fr)); gap:6px; margin:0; padding-bottom:12px; }
-  .tgroup{
-    display:block; grid-column:1 / -1; font-size:12.5px; font-weight:700; color:var(--muted);
-    text-transform:uppercase; letter-spacing:.06em; margin:2px 2px -2px;
-  }
-  .tgroup.g1{ order:0; } .tgroup.g2{ order:5; margin-top:6px; }
   .tool[data-t="open"], .tool[data-c="open"]{ order:1; }
   .tool[data-t="looks"], .tool[data-c="frame"]{ order:2; }
   .tool[data-t="color"], .tool[data-c="grid"]{ order:3; }
