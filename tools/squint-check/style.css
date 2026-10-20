@@ -340,6 +340,11 @@ input[type=range]::-moz-range-thumb{
   #tabs button[aria-pressed="true"]{ background:color-mix(in srgb, var(--panel) 80%, transparent); border-bottom-color:transparent; }
   .drawer-in{ background:color-mix(in srgb, var(--panel) 80%, transparent); padding:6px 10px 4px; }
   #toast{ bottom:calc(14px + var(--cover, 0px)); }
+  /* Frosted glass: the panel blurs the picture under it, so the tools stay easy to read.
+     main.js turns it off (data-glass="off") on a device where it makes panning slow. */
+  #app:not([data-glass="off"]) #tabs button, #app:not([data-glass="off"]) .drawer-in{
+    -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
+  }
 
   /* Until this tab has its picture, only the tabs show; then the tools slide up. */
   #app[data-tools="closed"] .drawer{ grid-template-rows:0fr; }
@@ -369,6 +374,13 @@ input[type=range]::-moz-range-thumb{
   .toolbar{ grid-template-columns:repeat(4, minmax(0,1fr)); row-gap:4px; margin:0; padding-bottom:10px; }
   .tool{ min-height:64px; }
   .tool span{ font-size:14px; }
+}
+
+/* Reduce transparency (a device setting): a solid panel, with no glass. */
+@media (max-width: 879px) and (prefers-reduced-transparency: reduce){
+  #tabs button{ background:var(--chip) !important; }
+  #tabs button[aria-pressed="true"], .drawer-in{ background:var(--panel) !important; }
+  #tabs button, .drawer-in{ -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
 }
 
 @media (prefers-reduced-motion: reduce){
