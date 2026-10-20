@@ -324,7 +324,7 @@ window.addEventListener('keydown', function(e){
     case 'g': cycleGrid(); break;
     case 's': savePNG(); break;
     case '0': setValues(0); break;
-    case '2': case '3': case '4': case '5': case '7': setValues(Number(e.key)); break;
+    case '2': case '3': case '4': case '5': case '7': case '9': setValues(Number(e.key)); break;
     case '[': S.blur = Math.max(0, S.blur - 5); histDirty = true; syncUI(); requestRender(); break;
     case ']': S.blur = Math.min(100, S.blur + 5); histDirty = true; syncUI(); requestRender(); break;
   }
