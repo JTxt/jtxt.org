@@ -24,6 +24,15 @@
   --edge-bg:#1b1f22; --edge-ref:#e2e6e4; --edge-draw:#6f9fdc;
 }
 :root{ color-scheme:light dark; }
+/* Glass: the floating panel's tint and blur. 70% see-through over the tools; 50% above and
+   around the tabs on a wide screen, so the wordmark stays easy to read. */
+:root{
+  --glass:color-mix(in srgb, var(--panel) 30%, transparent);
+  --glass-chip:color-mix(in srgb, var(--chip) 30%, transparent);
+  --glass-head:color-mix(in srgb, var(--panel) 50%, transparent);
+  --glass-head-chip:color-mix(in srgb, var(--chip) 50%, transparent);
+  --glass-blur:10px;
+}
 :root[data-theme="light"]{ color-scheme:light; }
 :root[data-theme="dark"]{ color-scheme:dark; }
 html{ scroll-padding-top:env(safe-area-inset-top, 0px); }
@@ -330,7 +339,7 @@ input[type=range]::-moz-range-thumb{
 @media (max-width: 879px){
   .pane .rows{ min-height:154px; }
 
-  /* The stage fills the screen; the panel floats over its bottom, 20% see-through
+  /* The stage fills the screen; the panel floats over its bottom, 70% see-through
      (its text is not). --cover is the panel's height, set by sizeCanvas: the picture
      fits above it, and the welcome card and the toast keep clear of it. */
   #app{ position:relative; }
@@ -340,14 +349,14 @@ input[type=range]::-moz-range-thumb{
   }
   #tabs{ padding:0 8px; border-bottom:none; }
   #tabs button{ margin-bottom:0; }
-  #tabs button{ background:color-mix(in srgb, var(--chip) 80%, transparent); }
-  #tabs button[aria-pressed="true"]{ background:color-mix(in srgb, var(--panel) 80%, transparent); border-bottom-color:transparent; }
-  .drawer-in{ background:color-mix(in srgb, var(--panel) 80%, transparent); padding:6px 10px 4px; }
+  #tabs button{ background:var(--glass-chip); }
+  #tabs button[aria-pressed="true"]{ background:var(--glass); border-bottom-color:transparent; }
+  .drawer-in{ background:var(--glass); padding:6px 10px 4px; }
   #toast{ bottom:calc(14px + var(--cover, 0px)); }
   /* Frosted glass: the panel blurs the picture under it, so the tools stay easy to read.
      main.js turns it off (data-glass="off") on a device where it makes panning slow. */
   #app:not([data-glass="off"]) #tabs button, #app:not([data-glass="off"]) .drawer-in{
-    -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
+    -webkit-backdrop-filter:blur(var(--glass-blur)); backdrop-filter:blur(var(--glass-blur));
   }
 
   /* Until this tab has its picture, only the tabs show; then the tools slide up. */
@@ -365,33 +374,53 @@ input[type=range]::-moz-range-thumb{
 
 /* ---------- Wide screens: side panel ---------- */
 @media (min-width: 880px){
-  /* The stage fills the window; the panel floats over its right side, 20% see-through and
-     frosted like the phone's. --cover-x is its width, set by sizeCanvas: the picture fits
-     in the part of the stage it leaves. */
+  /* The stage fills the window; the panel floats over its right side, frosted like the
+     phone's. --cover-x is its width, set by sizeCanvas: the picture fits in the part of the
+     stage it leaves. The panel blurs; its parts paint the tint: --glass-head on the header
+     and around the tabs, --glass on the open tab and the tools under it. */
   #app{ position:relative; grid-template-columns:100%; grid-template-rows:100%; }
   #panel{
     position:absolute; top:0; right:0; bottom:0; z-index:5; width:clamp(340px, 26vw, 420px);
-    background:color-mix(in srgb, var(--panel) 80%, transparent);
-    border-top:none; border-left:1px solid var(--line); padding:18px 18px 14px; gap:12px; overflow-y:auto;
+    background:none; border-top:none; border-left:1px solid var(--line); padding:0; gap:0; overflow-y:auto;
   }
-  #app:not([data-glass="off"]) #panel{ -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); }
+  #app:not([data-glass="off"]) #panel{ -webkit-backdrop-filter:blur(var(--glass-blur)); backdrop-filter:blur(var(--glass-blur)); }
   .pane, .rows, .drawer-in{ gap:12px; }
+  .drawer{ flex:1 0 auto; }
+  .drawer-in{ background:var(--glass); padding:16px 18px 14px; }
 
   /* The wordmark, with the tagline on one line under it. */
-  .brand{ display:flex; flex-direction:column; gap:2px; margin-bottom:4px; }
+  .brand{ display:flex; flex-direction:column; gap:2px; margin:0; padding:18px 18px 14px; background:var(--glass-head); }
   .brand .wm{ font-family:var(--display); font-size:27px; letter-spacing:.04em; white-space:nowrap; }
   .brand small{ color:var(--muted); font-size:14px; line-height:1.35; }
 
-  /* Two-line folder tabs, one height: the verb big, the rest small under it. */
+  /* Two-line folder tabs, one height: the verb big, the rest small under it. Each tab paints
+     its own rounded top with gradients (the corners in the header tint), and the gutters
+     beside them are header tint too, so no tint stacks on another. */
+  #tabs{ border-bottom:none; padding:0; gap:0; }
+  #tabs::before, #tabs::after{ content:''; flex:0 0 18px; align-self:stretch; background:var(--glass-head); }
   #tabs button{
-    min-height:54px; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    line-height:1.15; padding:4px 8px; background:color-mix(in srgb, var(--chip) 80%, transparent);
+    --in:var(--glass-head-chip);
+    min-height:54px; margin:0; border:none; border-radius:0; box-shadow:none;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    line-height:1.15; padding:4px 8px;
+    background:
+      radial-gradient(circle at 100% 100%, var(--in) 9.5px, var(--glass-head) 10px) left top / 10px 10px no-repeat,
+      radial-gradient(circle at 0 100%, var(--in) 9.5px, var(--glass-head) 10px) right top / 10px 10px no-repeat,
+      linear-gradient(var(--in), var(--in)) center top / calc(100% - 20px) 10px no-repeat,
+      linear-gradient(var(--in), var(--in)) left bottom / 100% calc(100% - 10px) no-repeat;
   }
-  #tabs button[aria-pressed="true"]{ min-height:54px; background:transparent; border-bottom-color:transparent; }
+  #tabs button + button{ border-left:4px solid var(--glass-head); }
+  #tabs button[aria-pressed="true"]{
+    --in:var(--glass); min-height:54px; box-shadow:none;
+    background:
+      linear-gradient(var(--accent), var(--accent)) center top / calc(100% - 16px) 3px no-repeat,
+      radial-gradient(circle at 100% 100%, var(--in) 9.5px, var(--glass-head) 10px) left top / 10px 10px no-repeat,
+      radial-gradient(circle at 0 100%, var(--in) 9.5px, var(--glass-head) 10px) right top / 10px 10px no-repeat,
+      linear-gradient(var(--in), var(--in)) center top / calc(100% - 20px) 10px no-repeat,
+      linear-gradient(var(--in), var(--in)) left bottom / 100% calc(100% - 10px) no-repeat;
+  }
   #tabs button b{ font-size:17px; }
   #tabs button span{ font-size:13.5px; }
-  #tabs{ border-bottom:none; }
-  #tabs button{ margin-bottom:0; }
 
   #strip{ height:84px; }
   /* With no picture there are no values to show: a short strip, not an empty box. */
@@ -424,8 +453,8 @@ input[type=range]::-moz-range-thumb{
 @media (prefers-reduced-transparency: reduce){
   #panel{ -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
 }
-@media (min-width: 880px) and (prefers-reduced-transparency: reduce){
-  #panel{ background:var(--panel) !important; }
+@media (prefers-reduced-transparency: reduce){
+  :root{ --glass:var(--panel); --glass-chip:var(--chip); --glass-head:var(--panel); --glass-head-chip:var(--chip); }
 }
 @media (max-width: 879px) and (prefers-reduced-transparency: reduce){
   #tabs button{ background:var(--chip) !important; }
