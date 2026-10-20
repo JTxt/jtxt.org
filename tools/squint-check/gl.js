@@ -190,14 +190,14 @@ function drawMain(v, srcTex, target, w, h, bgAlpha){
   gl.uniform1i(U.u_image, 0);
   gl.uniform2f(U.u_canvasSize, w, h);
   gl.uniform2f(U.u_imageSize, imgW, imgH);
-  // cover: the height the floating panel hides; the picture fits and centers above it.
-  var cv = v.cover || 0;
-  gl.uniform2f(U.u_pan, v.panX || 0, (v.panY || 0) + cv/2);
+  // cover: the size the floating panel hides; the picture fits and centers beside it.
+  var cx = v.coverX || 0, cy = v.coverY || 0;
+  gl.uniform2f(U.u_pan, (v.panX || 0) - cx/2, (v.panY || 0) + cy/2);
   gl.uniform1f(U.u_rotation, v.rotation || 0);
   gl.uniform1f(U.u_flipX, v.flipX == null ? 1 : v.flipX);
   gl.uniform1f(U.u_flipY, 1);
   gl.uniform1f(U.u_zoom, v.zoom || 1);
-  gl.uniform1f(U.u_fitScale, fitScaleFor(v.rotation || 0, imgW, imgH, w, h - cv));
+  gl.uniform1f(U.u_fitScale, fitScaleFor(v.rotation || 0, imgW, imgH, w - cx, h - cy));
   gl.uniform1f(U.u_bgAlpha, bgAlpha);
   var bg = v.bg || [0,0,0];
   gl.uniform3f(U.u_bg, bg[0], bg[1], bg[2]);

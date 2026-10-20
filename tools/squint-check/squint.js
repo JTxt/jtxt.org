@@ -448,7 +448,7 @@ function screenToImage(cx, cy){
   var c = toCanvas(cx, cy);
   var px = (c.x - view.x)/view.zoom, py = (c.y - view.y)/view.zoom;
   var rot = st.rot.c, cs = Math.cos(-rot), sn = Math.sin(-rot);
-  var f = fitScaleFor(rot, imgW, imgH, canvas.width, fitH(canvas.height));
+  var f = fitScaleFor(rot, imgW, imgH, fitW(canvas.width), fitH(canvas.height));
   var rx = (px*cs - py*sn)/f, ry = (px*sn + py*cs)/f;
   var u = rx/imgW*st.flip.c + 0.5, v = ry/imgH + 0.5;
   if(u < 0 || u > 1 || v < 0 || v > 1) return null;

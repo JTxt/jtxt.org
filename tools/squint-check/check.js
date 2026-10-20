@@ -131,8 +131,8 @@ function guessPlacement(){
 // Screen (the canvas's 0..1 uv, y up) -> reference texture uv: the same view
 // the Squint shader applies, written as one matrix.
 function viewToRef(w, h){
-  var rot = st.rot.c, fl = st.flip.c, z = view.zoom, fit = fitScaleFor(rot, imgW, imgH, w, fitH(h));
-  var A = [w, 0, -w/2 - view.x, 0, h, -h/2 - view.y - cover/2, 0, 0, 1];
+  var rot = st.rot.c, fl = st.flip.c, z = view.zoom, fit = fitScaleFor(rot, imgW, imgH, fitW(w), fitH(h));
+  var A = [w, 0, -w/2 - view.x + coverX/2, 0, h, -h/2 - view.y - coverY/2, 0, 0, 1];
   var c = Math.cos(-rot), s = Math.sin(-rot), k = 1/(z*fit);
   var R = [c*k, -s*k, 0, s*k, c*k, 0, 0, 0, 1];
   var E = [fl/imgW, 0, 0.5, 0, 1/imgH, 0.5, 0, 0, 1];
@@ -153,7 +153,7 @@ function screenToRef(cx, cy){
   return { x:q[0]*C.rw, y:(1 - q[1])*C.rh };
 }
 // Device pixels per R pixel on screen.
-function pxPerR(w, h){ return fitScaleFor(st.rot.c, imgW, imgH, w, fitH(h)) * view.zoom * imgW / C.rw; }
+function pxPerR(w, h){ return fitScaleFor(st.rot.c, imgW, imgH, fitW(w), fitH(h)) * view.zoom * imgW / C.rw; }
 function cssPxPerR(){ return pxPerR(canvas.width, canvas.height) * stage.clientWidth / Math.max(1, canvas.width); }
 
 // A line's thresholds on a blurred mask, for a line widthPx wide with a halo haloPx
@@ -357,7 +357,7 @@ function setDrift(on){
 // line out from the box's center. When the box is bigger than the stage, the handle slides in
 // along that line so it stays inside the part of the stage you can see.
 function keepIn(c, p, cw, ch){
-  var m = 22, x0 = m, y0 = m, x1 = cw - m, y1 = ch - cover*cw/Math.max(1, canvas.width) - m;
+  var k = cw/Math.max(1, canvas.width), m = 22, x0 = m, y0 = m, x1 = cw - coverX*k - m, y1 = ch - coverY*k - m;
   if(x1 <= x0 || y1 <= y0) return p;
   if(p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1) return p;
   if(c[0] < x0 || c[0] > x1 || c[1] < y0 || c[1] > y1)

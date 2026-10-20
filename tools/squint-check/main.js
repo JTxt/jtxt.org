@@ -30,7 +30,7 @@ function glassFrame(now){
   requestAnimationFrame(glassFrame);
 }
 stage.addEventListener('pointerdown', function(){
-  if(glass.state || glass.live || !hasImage || !cover) return;
+  if(glass.state || glass.live || !hasImage || !(coverX || coverY)) return;
   glass.live = true; glass.times = []; glass.last = 0;
   requestAnimationFrame(glassFrame);
 }, { passive:true });

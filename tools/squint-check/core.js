@@ -110,10 +110,12 @@ var ST_KEYS = ['rot','flip','chroma'];
 // =============================================================
 var running = false, lastT = 0, comparing = false;
 var view = { zoom:1, x:0, y:0 };
-// On a phone the panel floats over the bottom of the stage. cover is the height it covers, in
-// canvas pixels: the picture fits and centers in the stage above it (fit and lift below).
-var cover = 0;
-function fitH(h){ return Math.max(1, h - cover); }
+// The panel floats over the stage: over its bottom on a phone, its right side on a wide
+// screen. coverX and coverY are the width and height it covers, in canvas pixels: the
+// picture fits and centers in the part of the stage you can see.
+var coverX = 0, coverY = 0;
+function fitW(w){ return Math.max(1, w - coverX); }
+function fitH(h){ return Math.max(1, h - coverY); }
 
 function surroundRGB(){ return hexRGB(SURROUNDS[S.surround]); }
 
@@ -133,8 +135,11 @@ function sizeCanvas(){
   if(canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; }
   if(ov.width !== w || ov.height !== h){ ov.width = w; ov.height = h; }
   var floating = getComputedStyle(panelEl).position === 'absolute';
-  cover = floating ? Math.round(panelEl.offsetHeight*dpr) : 0;
-  app.style.setProperty('--cover', (floating ? panelEl.offsetHeight : 0) + 'px');
+  var side = floating && window.matchMedia && matchMedia('(min-width: 880px)').matches;
+  var cx = floating && side ? panelEl.offsetWidth : 0, cy = floating && !side ? panelEl.offsetHeight : 0;
+  coverX = Math.round(cx*dpr); coverY = Math.round(cy*dpr);
+  app.style.setProperty('--cover', cy + 'px');
+  app.style.setProperty('--cover-x', cx + 'px');
 }
 function clearOverlay(){ ovCtx.setTransform(1,0,0,1,0,0); ovCtx.clearRect(0, 0, ov.width, ov.height); }
 function paint(){
@@ -143,7 +148,7 @@ function paint(){
   clearOverlay();
   sizeCanvas();
   if(histDirty) updateHist();
-  var v = viewValues(); v.cover = cover;
+  var v = viewValues(); v.coverX = coverX; v.coverY = coverY;
   drawMain(v, runBlur(v.blurPx), null, canvas.width, canvas.height, 1);
 }
 function settled(){

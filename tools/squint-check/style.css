@@ -68,9 +68,9 @@ button{ font:inherit; color:inherit; }
   box-shadow:0 1px 0 rgba(0,0,0,.15);
 }
 .tag.show{ opacity:1; }
-#beforeTag{ top:12px; left:50%; transform:translateX(-50%); background:var(--accent); color:var(--on-accent); }
-#zoomTag{ top:12px; right:12px; font-variant-numeric:tabular-nums; }
-#driftTag{ top:12px; left:50%; transform:translateX(-50%); white-space:nowrap; font-variant-numeric:tabular-nums; }
+#beforeTag{ top:12px; left:calc((100% - var(--cover-x, 0px))/2); transform:translateX(-50%); background:var(--accent); color:var(--on-accent); }
+#zoomTag{ top:12px; right:calc(12px + var(--cover-x, 0px)); font-variant-numeric:tabular-nums; }
+#driftTag{ top:12px; left:calc((100% - var(--cover-x, 0px))/2); transform:translateX(-50%); white-space:nowrap; font-variant-numeric:tabular-nums; }
 
 #readout{
   position:absolute; top:12px; left:12px; z-index:3;
@@ -86,7 +86,7 @@ button{ font:inherit; color:inherit; }
 #readMeta{ font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
 
 #toast{
-  position:absolute; left:50%; bottom:14px; transform:translate(-50%, 6px); z-index:9;
+  position:absolute; left:calc((100% - var(--cover-x, 0px))/2); bottom:14px; transform:translate(-50%, 6px); z-index:9;
   background:var(--ink); color:var(--panel);
   padding:7px 13px; border-radius:8px; font-size:15px; max-width:min(92%, 420px); text-align:center;
   opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
@@ -98,7 +98,7 @@ button{ font:inherit; color:inherit; }
    stage (a phone, with the panel below) starts at the top and scrolls instead of being
    cut off at both ends. pan-y lets it scroll inside the stage's touch-action:none. */
 .empty{
-  position:absolute; inset:0; display:flex; padding:20px;
+  position:absolute; inset:0; right:var(--cover-x, 0px); display:flex; padding:20px;
   overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y;
   z-index:4;
 }
@@ -321,6 +321,10 @@ input[type=range]::-moz-range-thumb{
 .tool.hold.held{ background:var(--accent); color:var(--on-accent); }
 
 .fileInput{ display:none; }
+.tgroup{ display:none; }
+/* Before this tab has its picture, Open is the next step: it takes the accent. */
+#app[data-tools="closed"] .tool[data-t="open"], #app[data-tools="closed"] .tool[data-c="open"]{ color:var(--accent); }
+#app[data-tools="closed"] .tool[data-t="open"] span, #app[data-tools="closed"] .tool[data-c="open"] span{ font-weight:700; }
 
 /* Both panes keep one height on a phone, so the picture doesn't jump between tabs. */
 @media (max-width: 879px){
@@ -361,22 +365,68 @@ input[type=range]::-moz-range-thumb{
 
 /* ---------- Wide screens: side panel ---------- */
 @media (min-width: 880px){
-  #app{ grid-template-columns:minmax(0,1fr) 360px; grid-template-rows:100%; }
-  #panel{ border-top:none; border-left:1px solid var(--line); padding:18px 18px 14px; gap:12px; overflow-y:auto; }
-  .pane, .rows{ gap:12px; }
-  .brand{
-    display:flex; align-items:baseline; justify-content:space-between; margin-bottom:4px; gap:10px;
+  /* The stage fills the window; the panel floats over its right side, 20% see-through and
+     frosted like the phone's. --cover-x is its width, set by sizeCanvas: the picture fits
+     in the part of the stage it leaves. */
+  #app{ position:relative; grid-template-columns:100%; grid-template-rows:100%; }
+  #panel{
+    position:absolute; top:0; right:0; bottom:0; z-index:5; width:clamp(340px, 26vw, 420px);
+    background:color-mix(in srgb, var(--panel) 80%, transparent);
+    border-top:none; border-left:1px solid var(--line); padding:18px 18px 14px; gap:12px; overflow-y:auto;
   }
+  #app:not([data-glass="off"]) #panel{ -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); }
+  .pane, .rows, .drawer-in{ gap:12px; }
+
+  /* The wordmark, with the tagline on one line under it. */
+  .brand{ display:flex; flex-direction:column; gap:2px; margin-bottom:4px; }
   .brand .wm{ font-family:var(--display); font-size:27px; letter-spacing:.04em; white-space:nowrap; }
-  .brand small{ color:var(--muted); font-size:14px; line-height:1.35; text-align:right; }
+  .brand small{ color:var(--muted); font-size:14px; line-height:1.35; }
+
+  /* Two-line folder tabs, one height: the verb big, the rest small under it. */
+  #tabs button{
+    min-height:54px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    line-height:1.15; padding:4px 8px; background:color-mix(in srgb, var(--chip) 80%, transparent);
+  }
+  #tabs button[aria-pressed="true"]{ min-height:54px; background:transparent; border-bottom-color:transparent; }
+  #tabs button b{ font-size:17px; }
+  #tabs button span{ font-size:13.5px; }
+  #tabs{ border-bottom:none; }
+  #tabs button{ margin-bottom:0; }
+
   #strip{ height:84px; }
+  /* With no picture there are no values to show: a short strip, not an empty box. */
+  #app[data-tools="closed"] .pane-squint #strip{ height:28px; }
   #stripHint{ display:block; }
-  .toolbar{ grid-template-columns:repeat(4, minmax(0,1fr)); row-gap:4px; margin:0; padding-bottom:10px; }
-  .tool{ min-height:64px; }
+
+  /* Tools: tiles in two labeled rows (Picture, then Study or Line up). */
+  .toolbar{ grid-template-columns:repeat(4, minmax(0,1fr)); gap:6px; margin:0; padding-bottom:12px; }
+  .tgroup{
+    display:block; grid-column:1 / -1; font-size:12.5px; font-weight:700; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.06em; margin:2px 2px -2px;
+  }
+  .tgroup.g1{ order:0; } .tgroup.g2{ order:5; margin-top:6px; }
+  .tool[data-t="open"], .tool[data-c="open"]{ order:1; }
+  .tool[data-t="looks"], .tool[data-c="frame"]{ order:2; }
+  .tool[data-t="color"], .tool[data-c="grid"]{ order:3; }
+  .tool[data-t="save"], .tool[data-c="save"]{ order:4; }
+  .tool[data-t="grid"], .tool[data-c="match"]{ order:6; }
+  .tool[data-t="rotate"], .tool[data-c="rotate"]{ order:7; }
+  .tool[data-t="mirror"], .tool[data-c="mirror"]{ order:8; }
+  .tool[data-t="before"], .tool[data-c="move"]{ order:9; }
+  .tool{ min-height:64px; background:color-mix(in srgb, var(--chip) 70%, transparent); }
+  .tool:hover:not(:disabled){ background:var(--chip); color:var(--ink); }
+  .tool.on, .tool[aria-pressed="true"]{ background:var(--accent-soft); }
+  .tool:disabled{ opacity:.55; }
   .tool span{ font-size:14px; }
 }
 
 /* Reduce transparency (a device setting): a solid panel, with no glass. */
+@media (prefers-reduced-transparency: reduce){
+  #panel{ -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+}
+@media (min-width: 880px) and (prefers-reduced-transparency: reduce){
+  #panel{ background:var(--panel) !important; }
+}
 @media (max-width: 879px) and (prefers-reduced-transparency: reduce){
   #tabs button{ background:var(--chip) !important; }
   #tabs button[aria-pressed="true"], .drawer-in{ background:var(--panel) !important; }
