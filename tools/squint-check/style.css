@@ -24,13 +24,13 @@
   --edge-bg:#1b1f22; --edge-ref:#e2e6e4; --edge-draw:#6f9fdc;
 }
 :root{ color-scheme:light dark; }
-/* Glass: the floating panel's tint and blur. 70% see-through over the tools; 50% above and
-   around the tabs on a wide screen, so the wordmark stays easy to read. */
+/* Glass: the floating panel's tint and blur. 50% tint over the tools; on a wide screen,
+   30% (more see-through) above and around the tabs. */
 :root{
-  --glass:color-mix(in srgb, var(--panel) 30%, transparent);
-  --glass-chip:color-mix(in srgb, var(--chip) 30%, transparent);
-  --glass-head:color-mix(in srgb, var(--panel) 50%, transparent);
-  --glass-head-chip:color-mix(in srgb, var(--chip) 50%, transparent);
+  --glass:color-mix(in srgb, var(--panel) 50%, transparent);
+  --glass-chip:color-mix(in srgb, var(--chip) 50%, transparent);
+  --glass-head:color-mix(in srgb, var(--panel) 30%, transparent);
+  --glass-head-chip:color-mix(in srgb, var(--chip) 30%, transparent);
   --glass-blur:10px;
 }
 :root[data-theme="light"]{ color-scheme:light; }
@@ -394,13 +394,13 @@ input[type=range]::-moz-range-thumb{
   .brand small{ color:var(--muted); font-size:14px; line-height:1.35; }
 
   /* Two-line folder tabs, one height: the verb big, the rest small under it. Each tab paints
-     its own rounded top with gradients (the corners in the header tint), and the gutters
-     beside them are header tint too, so no tint stacks on another. */
-  #tabs{ border-bottom:none; padding:0; gap:0; }
-  #tabs::before, #tabs::after{ content:''; flex:0 0 18px; align-self:stretch; background:var(--glass-head); }
+     its own rounded top with gradients (the corners in the header tint). The gutters beside
+     and between the tabs are their borders, in the header tint too, with the background
+     clipped inside them, so no tint stacks on another. */
+  #tabs{ border-bottom:none; padding:0; gap:0; align-items:stretch; }
   #tabs button{
     --in:var(--glass-head-chip);
-    min-height:54px; margin:0; border:none; border-radius:0; box-shadow:none;
+    min-height:54px; margin:0; border:0 solid var(--glass-head); border-radius:0; box-shadow:none;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     line-height:1.15; padding:4px 8px;
     background:
@@ -408,8 +408,11 @@ input[type=range]::-moz-range-thumb{
       radial-gradient(circle at 0 100%, var(--in) 9.5px, var(--glass-head) 10px) right top / 10px 10px no-repeat,
       linear-gradient(var(--in), var(--in)) center top / calc(100% - 20px) 10px no-repeat,
       linear-gradient(var(--in), var(--in)) left bottom / 100% calc(100% - 10px) no-repeat;
+    background-clip:padding-box;
   }
-  #tabs button + button{ border-left:4px solid var(--glass-head); }
+  #tabs button:first-child{ border-left-width:18px; }
+  #tabs button:last-child{ border-right-width:18px; }
+  #tabs button + button{ border-left-width:4px; }
   #tabs button[aria-pressed="true"]{
     --in:var(--glass); min-height:54px; box-shadow:none;
     background:
@@ -418,6 +421,7 @@ input[type=range]::-moz-range-thumb{
       radial-gradient(circle at 0 100%, var(--in) 9.5px, var(--glass-head) 10px) right top / 10px 10px no-repeat,
       linear-gradient(var(--in), var(--in)) center top / calc(100% - 20px) 10px no-repeat,
       linear-gradient(var(--in), var(--in)) left bottom / 100% calc(100% - 10px) no-repeat;
+    background-clip:padding-box;
   }
   #tabs button b{ font-size:17px; }
   #tabs button span{ font-size:13.5px; }
