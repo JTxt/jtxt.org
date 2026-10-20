@@ -8,7 +8,7 @@
 //   Squint: tap reads a value, double tap isolates its band,
 //     hold shows the original, pinch or wheel zooms, drag pans.
 //   Check, moving the drawing: drag moves it, pinch or wheel scales it,
-//     twist or the hover handle turns it, frame edges drag.
+//     twist or the hover handles turn and scale it, frame edges drag.
 //   Check, moving the view: as Squint, and hold hides the outline.
 // =============================================================
 var holdTimer = null, downX = 0, downY = 0, moved = false, held = false;
@@ -75,6 +75,10 @@ function stepDrag(e){
   } else if(drag.kind === 'rotate'){
     var a = Math.atan2(R.y - drag.c.y, R.x - drag.c.x);
     transformAbout(drag.c, 1, wrapAngle(a - drag.a), 0, 0); drag.a = a; C.moved = true;
+  } else if(drag.kind === 'scale'){
+    // The pointer's distance from the box's center sets the size: hand-fine, unlike the wheel.
+    var d = Math.hypot(R.x - drag.c.x, R.y - drag.c.y) || 1;
+    transformAbout(drag.c, d/drag.d, 0, 0, 0); drag.d = d; C.moved = true;
   } else if(drag.kind === 'frame'){
     moveFrame(drag.edges, R);
   }
@@ -96,6 +100,10 @@ stage.addEventListener('pointerdown', function(e){
     if(hit && hit.type === 'rotate'){
       var c = boxCenterR(), R0 = screenToRef(e.clientX, e.clientY);
       drag = { kind:'rotate', c:c, a:Math.atan2(R0.y - c.y, R0.x - c.x) };
+    }
+    else if(hit && hit.type === 'scale'){
+      var c2 = boxCenterR(), R1 = screenToRef(e.clientX, e.clientY);
+      drag = { kind:'scale', c:c2, d:Math.hypot(R1.x - c2.x, R1.y - c2.y) || 1 };
     }
     else if(hit && hit.type === 'frame') drag = { kind:'frame', edges:hit.edges };
     else if(C.move === 'drawing') drag = { kind:'draw', R:screenToRef(e.clientX, e.clientY) };
@@ -162,7 +170,7 @@ function stageUp(e){
     }
   }
   if(MODE === 'check' && moved && (was ? was.kind !== 'frame' : steering())) afterHandMove();
-  if(was && was.kind === 'rotate') paint();
+  if(was && (was.kind === 'rotate' || was.kind === 'scale')) paint();
   held = false; panning = false;
 }
 stage.addEventListener('pointerup', stageUp);

@@ -352,7 +352,21 @@ function setDrift(on){
   syncUI(); paint();
 }
 
-// ---------- Overlay: the frame, and the drawing's box with its rotate handle
+// ---------- Overlay: the frame, and the drawing's box with its rotate and scale handles
+// A handle sits just past the box's top (rotate) or its bottom right corner (scale), on the
+// line out from the box's center. When the box is bigger than the stage, the handle slides in
+// along that line so it stays inside the part of the stage you can see.
+function keepIn(c, p, cw, ch){
+  var m = 22, x0 = m, y0 = m, x1 = cw - m, y1 = ch - cover*cw/Math.max(1, canvas.width) - m;
+  if(x1 <= x0 || y1 <= y0) return p;
+  if(p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1) return p;
+  if(c[0] < x0 || c[0] > x1 || c[1] < y0 || c[1] > y1)
+    return [Math.max(x0, Math.min(x1, p[0])), Math.max(y0, Math.min(y1, p[1]))];
+  var dx = p[0] - c[0], dy = p[1] - c[1], t = 1;
+  if(dx > 0) t = Math.min(t, (x1 - c[0])/dx); else if(dx < 0) t = Math.min(t, (x0 - c[0])/dx);
+  if(dy > 0) t = Math.min(t, (y1 - c[1])/dy); else if(dy < 0) t = Math.min(t, (y0 - c[1])/dy);
+  return [c[0] + dx*t, c[1] + dy*t];
+}
 function handleGeom(Mi){
   var b = boxD(), cw = stage.clientWidth, ch = stage.clientHeight;
   var pts = [[b.x0,b.y0],[b.x1,b.y0],[b.x1,b.y1],[b.x0,b.y1]].map(function(q){
@@ -362,11 +376,14 @@ function handleGeom(Mi){
   var cx = (pts[0][0] + pts[2][0])/2, cy = (pts[0][1] + pts[2][1])/2;
   var tx = (pts[0][0] + pts[1][0])/2, ty = (pts[0][1] + pts[1][1])/2;
   var dx = tx - cx, dy = ty - cy, dl = Math.hypot(dx, dy) || 1;
-  return { pts:pts, top:[tx, ty], handle:[tx + dx/dl*30, ty + dy/dl*30] };
+  var k = pts[2], ex = k[0] - cx, ey = k[1] - cy, el = Math.hypot(ex, ey) || 1;
+  return { pts:pts, top:[tx, ty], corner:k,
+    handle:keepIn([cx, cy], [tx + dx/dl*30, ty + dy/dl*30], cw, ch),
+    scale:keepIn([cx, cy], [k[0] + ex/el*22, k[1] + ey/el*22], cw, ch) };
 }
 function showHandle(){
   return MODE === 'check' && C.has && C.P && C.move === 'drawing' &&
-    ((C.hoverOn && lastPtr === 'mouse') || (drag && drag.kind === 'rotate'));
+    ((C.hoverOn && lastPtr === 'mouse') || (drag && (drag.kind === 'rotate' || drag.kind === 'scale')));
 }
 function frameScreen(Mi){
   var f = C.frame, cw = stage.clientWidth, ch = stage.clientHeight;
@@ -407,7 +424,21 @@ function drawOverlay(M){
     ctx.setLineDash([5, 5]);
     twice(function(){ poly(g.pts); }, 1);
     ctx.setLineDash([]);
-    twice(function(){ seg(g.top, g.handle); }, 1.5);
+    // The stick only while the handle is in its home spot, past the box's edge.
+    if(Math.hypot(g.handle[0] - g.top[0], g.handle[1] - g.top[1]) > 29) twice(function(){ seg(g.top, g.handle); }, 1.5);
+    if(Math.hypot(g.scale[0] - g.corner[0], g.scale[1] - g.corner[1]) > 21) twice(function(){ seg(g.corner, g.scale); }, 1.5);
+    // Scale: a square, with a two-way arrow out from the center.
+    var sx = g.scale[0], sy = g.scale[1], ua = Math.atan2(sy - g.corner[1], sx - g.corner[0]);
+    if(Math.hypot(sx - g.corner[0], sy - g.corner[1]) < 1) ua = Math.PI/4;
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(ua - Math.PI/4);
+    ctx.beginPath(); ctx.rect(-9, -9, 18, 18);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-4.5, -4.5); ctx.lineTo(4.5, 4.5);
+    ctx.moveTo(-4.5, -1); ctx.lineTo(-4.5, -4.5); ctx.lineTo(-1, -4.5);
+    ctx.moveTo(4.5, 1); ctx.lineTo(4.5, 4.5); ctx.lineTo(1, 4.5);
+    ctx.strokeStyle = '#1c1c1e'; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.restore();
     ctx.beginPath(); ctx.arc(g.handle[0], g.handle[1], 10, 0, Math.PI*2);
     ctx.fillStyle = '#fff'; ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.5; ctx.stroke();
@@ -416,13 +447,14 @@ function drawOverlay(M){
   }
 }
 
-// ---------- Hit testing: rotate handle first, then the frame's edges
+// ---------- Hit testing: the rotate and scale handles first, then the frame's edges
 function hitTest(e){
   var r = stage.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
   var Mi = m3inv(viewToRef(canvas.width, canvas.height));
   if(C.move === 'drawing' && e.pointerType === 'mouse'){
     var g = handleGeom(Mi);
     if(Math.hypot(px - g.handle[0], py - g.handle[1]) < 15) return { type:'rotate' };
+    if(Math.hypot(px - g.scale[0], py - g.scale[1]) < 15) return { type:'scale' };
   }
   if(C.frameOn && C.frame){
     var tol = (e.pointerType === 'mouse' ? 8 : 20) / cssPxPerR();
@@ -446,6 +478,7 @@ function moveFrame(ed, R){
 function cursorFor(hit){
   if(!hit) return C.move === 'drawing' ? 'move' : '';
   if(hit.type === 'rotate') return 'grab';
+  if(hit.type === 'scale') return 'nwse-resize';
   var e = hit.edges, n = (e.x0 || e.x1 ? 1 : 0) + (e.y0 || e.y1 ? 1 : 0);
   if(n === 2) return 'move';
   var Mi = m3inv(viewToRef(canvas.width, canvas.height));
