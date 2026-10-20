@@ -17,11 +17,12 @@ var drag = null, lastPtr = 'mouse', wheelTimer = null;
 
 function steering(){ return MODE === 'check' && C.has && C.P && C.move === 'drawing'; }
 
+// Canvas pixels from the picture's home center (the middle of the stage above the panel), y up.
 function toCanvas(cx, cy){
   var r = stage.getBoundingClientRect();
   return {
     x: (cx - r.left)*canvas.width/Math.max(1, r.width) - canvas.width/2,
-    y: -((cy - r.top)*canvas.height/Math.max(1, r.height) - canvas.height/2)
+    y: -((cy - r.top)*canvas.height/Math.max(1, r.height) - canvas.height/2) - cover/2
   };
 }
 function clampPan(){

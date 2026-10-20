@@ -326,9 +326,20 @@ input[type=range]::-moz-range-thumb{
 @media (max-width: 879px){
   .pane .rows{ min-height:154px; }
 
-  /* The tabs sit on the page color above the panel, like folder tabs. */
-  #panel{ border-top:none; padding-top:0; }
-  #tabs{ background:var(--bg); margin:0 -10px; padding:6px 8px 0; }
+  /* The stage fills the screen; the panel floats over its bottom, 20% see-through
+     (its text is not). --cover is the panel's height, set by sizeCanvas: the picture
+     fits above it, and the welcome card and the toast keep clear of it. */
+  #app{ position:relative; }
+  #panel{
+    position:absolute; left:0; right:0; bottom:0; z-index:5;
+    background:none; border-top:none; padding:0; gap:0;
+  }
+  #tabs{ padding:0 8px; border-bottom:none; }
+  #tabs button{ margin-bottom:0; }
+  #tabs button{ background:color-mix(in srgb, var(--chip) 80%, transparent); }
+  #tabs button[aria-pressed="true"]{ background:color-mix(in srgb, var(--panel) 80%, transparent); border-bottom-color:transparent; }
+  .drawer-in{ background:color-mix(in srgb, var(--panel) 80%, transparent); padding:6px 10px 4px; }
+  #toast{ bottom:calc(14px + var(--cover, 0px)); }
 
   /* Until this tab has its picture, only the tabs show; then the tools slide up. */
   #app[data-tools="closed"] .drawer{ grid-template-rows:0fr; }
@@ -338,6 +349,7 @@ input[type=range]::-moz-range-thumb{
   .empty{ padding:0; }
   .welcome{
     max-width:none; min-height:100%; border-radius:0; box-shadow:none;
+    padding-bottom:calc(22px + var(--cover, 0px));
     display:flex; flex-direction:column; justify-content:center;
   }
 }

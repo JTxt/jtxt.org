@@ -73,7 +73,7 @@ function wrapAngle(a){ while(a > Math.PI) a -= 2*Math.PI; while(a < -Math.PI) a 
 // =============================================================
 // DOM
 // =============================================================
-var app = $('app'), stage = $('stage'), canvas = $('gl'), ov = $('ov'), ovCtx = ov.getContext('2d');
+var app = $('app'), panelEl = $('panel'), stage = $('stage'), canvas = $('gl'), ov = $('ov'), ovCtx = ov.getContext('2d');
 var empty = $('empty'), emptyDraw = $('emptyDraw'), drop = $('drop'), toastEl = $('toast');
 var readout = $('readout'), readSwatch = $('readSwatch'), readValue = $('readValue'), readMeta = $('readMeta');
 var beforeTag = $('beforeTag'), zoomTag = $('zoomTag');
@@ -110,6 +110,10 @@ var ST_KEYS = ['rot','flip','chroma'];
 // =============================================================
 var running = false, lastT = 0, comparing = false;
 var view = { zoom:1, x:0, y:0 };
+// On a phone the panel floats over the bottom of the stage. cover is the height it covers, in
+// canvas pixels: the picture fits and centers in the stage above it (fit and lift below).
+var cover = 0;
+function fitH(h){ return Math.max(1, h - cover); }
 
 function surroundRGB(){ return hexRGB(SURROUNDS[S.surround]); }
 
@@ -128,6 +132,9 @@ function sizeCanvas(){
   var w = Math.max(1, Math.round(stage.clientWidth*dpr)), h = Math.max(1, Math.round(stage.clientHeight*dpr));
   if(canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; }
   if(ov.width !== w || ov.height !== h){ ov.width = w; ov.height = h; }
+  var floating = getComputedStyle(panelEl).position === 'absolute';
+  cover = floating ? Math.round(panelEl.offsetHeight*dpr) : 0;
+  app.style.setProperty('--cover', (floating ? panelEl.offsetHeight : 0) + 'px');
 }
 function clearOverlay(){ ovCtx.setTransform(1,0,0,1,0,0); ovCtx.clearRect(0, 0, ov.width, ov.height); }
 function paint(){
@@ -136,7 +143,7 @@ function paint(){
   clearOverlay();
   sizeCanvas();
   if(histDirty) updateHist();
-  var v = viewValues();
+  var v = viewValues(); v.cover = cover;
   drawMain(v, runBlur(v.blurPx), null, canvas.width, canvas.height, 1);
 }
 function settled(){

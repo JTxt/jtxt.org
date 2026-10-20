@@ -11,7 +11,7 @@ if('ResizeObserver' in window){
   var rt = null;
   // The stage, not only the body: it also changes size when the tools slide up or down.
   var ro = new ResizeObserver(function(){ clearTimeout(rt); rt = setTimeout(onResize, 60); });
-  ro.observe(document.body); ro.observe(stage);
+  ro.observe(document.body); ro.observe(stage); ro.observe(panelEl);
 } else window.addEventListener('resize', onResize);
 if(window.matchMedia){
   var mq = window.matchMedia('(prefers-color-scheme: dark)');
