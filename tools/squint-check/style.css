@@ -94,12 +94,17 @@ button{ font:inherit; color:inherit; }
 #toast.show{ opacity:1; transform:translate(-50%, 0); }
 
 /* ---------- Empty states ---------- */
+/* The card centers with margin:auto, not align-items:center, so a card taller than the
+   stage (a phone, with the panel below) starts at the top and scrolls instead of being
+   cut off at both ends. pan-y lets it scroll inside the stage's touch-action:none. */
 .empty{
-  position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:20px;
+  position:absolute; inset:0; display:flex; padding:20px;
+  overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y;
   z-index:4;
 }
 .empty.hidden{ display:none; }
 .welcome{
+  margin:auto;
   background:var(--panel); border-radius:16px; padding:28px 26px 22px;
   max-width:430px; width:100%; text-align:center;
   box-shadow:0 12px 40px rgba(0,0,0,.22);
