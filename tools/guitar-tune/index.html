@@ -214,11 +214,11 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--text);outline-
 "use strict";
 
 const PRESETS=[
+  {id:"six",   name:"Guitar, 6 strings, standard (E A D G B E)",      notes:["E2","A2","D3","G3","B3","E4"]},
   {id:"dgbe",  name:"Classical guitar, top four strings (D G B E)", notes:["D3","G3","B3","E4"]},
   {id:"cgda",  name:"Tenor guitar (C G D A)",                       notes:["C3","G3","D4","A4"]},
   {id:"gcea",  name:"Ukulele (G C E A)",                            notes:["G4","C4","E4","A4"]},
-  {id:"cuatro",name:"Venezuelan cuatro (A D F♯ B)",                 notes:["A3","D4","F#4","B3"]},
-  {id:"six",   name:"Classical guitar, all six strings",            notes:["E2","A2","D3","G3","B3","E4"]}
+  {id:"cuatro",name:"Venezuelan cuatro (A D F♯ B)",                 notes:["A3","D4","F#4","B3"]}
 ];
 const SEMI={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
 function parseNote(s){
@@ -265,7 +265,7 @@ PRESETS.forEach(p=>{
 });
 let saved=null;
 try{ saved=localStorage.getItem("four-string-tuner:preset"); }catch(e){}
-presetSel.value=PRESETS.some(p=>p.id===saved)?saved:"dgbe";
+presetSel.value=PRESETS.some(p=>p.id===saved)?saved:"six";
 presetSel.addEventListener("change",()=>{
   setPreset(presetSel.value);
   try{ localStorage.setItem("four-string-tuner:preset",presetSel.value); }catch(e){}
