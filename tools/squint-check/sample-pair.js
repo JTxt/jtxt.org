@@ -71,8 +71,17 @@
   }
   function makeReference(rand) {
     var W = 640, H = 800, img = blank(W, H, 0.6), x, y;
-    for (y = 0; y < H; y++) { for (x = 0; x < W; x++) { img.data[y * W + x] = (y < 660 ? 0.55 + 0.15 * x / W : 0.35) + (rand() - 0.5) * 0.06; } }
+    for (y = 0; y < H; y++) { for (x = 0; x < W; x++) { img.data[y * W + x] = (y < 590 ? 0.55 + 0.15 * x / W : 0.35) + (rand() - 0.5) * 0.06; } }
     var s = shapes({ appleDx: 0, vaseW: 0 });
+    // Contact shadows on the table, so each object sits on it.
+    [[195, 630, 80, 12], [350, 642, 60, 10], [512, 652, 80, 10]].forEach(function (e) {
+      for (y = e[1] - e[3]; y <= e[1] + e[3]; y++) {
+        for (x = e[0] - e[2]; x <= e[0] + e[2]; x++) {
+          var dd = Math.hypot((x - e[0]) / e[2], (y - e[1]) / e[3]);
+          if (dd < 1) { img.data[y * W + x] -= 0.12 * (1 - dd); }
+        }
+      }
+    });
     fillPoly(img, s.vase, function (x) { return 0.25 + 0.4 * (x - 270) / 160; });
     fillPoly(img, s.apple, function (x, y) { return 0.75 - 0.5 * Math.hypot(x - 170, y - 540) / 90; });
     fillPoly(img, s.box, function (x) { return 0.85 - 0.1 * (x - 440) / 120; });
